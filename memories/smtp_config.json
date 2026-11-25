@@ -1,0 +1,9 @@
+{
+    "smtp_host": "smtp.qq.com",
+    "smtp_port": 465,
+    "smtp_user": "1066344121@qq.com",
+    "smtp_pass": "jcxvpchhpfxmbcja",
+    "from_addr": "1066344121@qq.com",
+    "use_ssl": true,
+    "from_label": "Kirara 重置服务"
+}

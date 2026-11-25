@@ -1,0 +1,70 @@
+
+
+/* 路由日志气泡样式 */
+.message.router-log {
+    background: linear-gradient(135deg, #f0f8ff, #e6e6fa);
+    border: 2px dashed #9370db;
+    border-radius: 15px;
+    padding: 10px 15px;
+    margin: 10px 0;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+}
+
+.message.router-log .router-icon {
+    font-size: 16px;
+    margin-right: 8px;
+}
+
+.message.router-log .router-label {
+    color: #9370db;
+    font-weight: bold;
+}
+
+.message.router-log.skill-log {
+    border-color: #ffa500;
+    background: linear-gradient(135deg, #fffaf0, #fff5ee);
+}
+
+.message.router-log.skill-log .router-label {
+    color: #ffa500;
+}
+
+.message.router-log.model-log {
+    border-color: #4169e1;
+    background: linear-gradient(135deg, #f0f8ff, #e6f2ff);
+}
+
+.message.router-log.model-log .router-label {
+    color: #4169e1;
+}
+
+.message.router-log .router-action {
+    color: #333;
+    margin-top: 5px;
+}
+
+.message.router-log .router-result {
+    color: #228b22;
+    margin-top: 5px;
+    padding-top: 5px;
+    border-top: 1px dashed #ccc;
+}
+
+.message.router-log .model-type-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    margin-left: 5px;
+}
+
+.message.router-log .model-type-badge.local {
+    background: linear-gradient(135deg, #228b22, #32cd32);
+    color: white;
+}
+
+.message.router-log .model-type-badge.cloud {
+    background: linear-gradient(135deg, #4169e1, #6495ed);
+    color: white;
+}

@@ -1,0 +1,2390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, height=device-height,initial-scale=1.0">
+    <title>Kirara|TeleVideo自研二次元AI副驾驶</title>
+    <link rel="stylesheet" href="/apps/kirara/css/kirara.css">
+    <link rel="stylesheet" href="/apps/kirara/css/kirara-router.css">
+    <link rel="stylesheet" href="/apps/kirara/css/kirara-workflow.css">
+</head>
+<style>
+    @keyframes crosshair-blink {
+        0% { opacity: 1; }
+        50% { opacity: 0; }
+        100% { opacity: 1; }
+    }
+    
+    .splash-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #000;
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+    }
+    
+    .splash-content {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: linear-gradient(135deg, pink 0%, purple 100%);
+    }
+    
+    .start-button {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        border: 3px solid rgba(147, 51, 234, 0.6);
+        background: rgba(0, 0, 0, 0.4);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        box-shadow: 0 0 30px rgba(147, 51, 234, 0.3), inset 0 0 30px rgba(147, 51, 234, 0.1);
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    .start-button:hover {
+        transform: scale(1.1);
+        box-shadow: 0 0 50px rgba(147, 51, 234, 0.6), inset 0 0 30px rgba(147, 51, 234, 0.2);
+        border-color: #fff;
+    }
+    
+    .start-button img {
+        width: 80px;
+        height: 80px;
+        transition: transform 0.3s ease;
+    }
+    
+    .start-button:hover img {
+        transform: scale(1.1);
+    }
+    
+    .start-text {
+        margin-top: 30px;
+        color: #fff;
+        font-size: 18px;
+        text-shadow: 0 0 20px rgba(147, 51, 234, 0.5);
+        opacity: 0.8;
+    }
+    
+    @keyframes pulse {
+        0%, 100% {
+            box-shadow: 0 0 30px rgba(147, 51, 234, 0.3), inset 0 0 30px rgba(147, 51, 234, 0.1);
+        }
+        50% {
+            box-shadow: 0 0 50px rgba(147, 51, 234, 0.6), inset 0 0 40px rgba(147, 51, 234, 0.2);
+        }
+    }
+    
+    .splash-fade-out {
+        animation: fadeOut 0.5s ease-out forwards;
+    }
+    
+    @keyframes fadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
+    }
+    
+    .content-fade-out {
+        animation: contentFadeOut 0.3s ease-out forwards;
+    }
+    
+    @keyframes contentFadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
+    }
+</style>
+<body class="chat-mode">
+    <!-- 启动画面 -->
+    <div class="splash-screen" id="splash-screen" style="display: none;">
+        <!-- 启动界面 -->
+        <div class="splash-content" id="splash-content">
+            <button class="start-button" id="start-button">
+                <img src="/apps/kirara/sprites/logos/kirara-3.png" alt="Start">
+            </button>
+            <div class="start-text">启动Kirara</div>
+        </div>
+    </div>
+    
+    <!-- 注册页面 -->
+    <div class="register-screen" id="register-screen">
+        <div class="register-container">
+            <div class="register-header">
+                <img src="/apps/kirara/sprites/logos/kirara-3.png" alt="Kirara" class="register-logo">
+                <h1>欢迎注册 Kirara</h1>
+                <p>请完成以下步骤来激活您的 Kirara AI 助手</p>
+                <div class="register-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-steps">
+                        <span class="step active" data-step="1">1</span>
+                        <span class="step" data-step="2">2</span>
+                        <span class="step" data-step="3">3</span>
+                        <span class="step" data-step="4">4</span>
+                        <span class="step" data-step="5">5</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="register-content">
+                <!-- 步骤1：用户名 -->
+                <div class="register-step active" id="step-1">
+                    <div class="step-icon">👤</div>
+                    <h2>您的称呼</h2>
+                    <p>Kirara 将用这个名字称呼您</p>
+                    <input type="text" id="username-input" placeholder="请输入您的名字" maxlength="20">
+                    <div class="step-actions">
+                        <button class="next-btn" id="step1-next">下一步 →</button>
+                    </div>
+                </div>
+                
+                <!-- 步骤2：生日（下拉菜单） -->
+                <div class="register-step" id="step-2">
+                    <div class="step-icon">🎂</div>
+                    <h2>您的生日</h2>
+                    <p>选择您的出生日期</p>
+                    <div class="birthday-selector">
+                        <select id="birthday-year" class="birthday-select">
+                            <option value="">请选择年</option>
+                        </select>
+                        <select id="birthday-month" class="birthday-select">
+                            <option value="">请选择月</option>
+                        </select>
+                        <select id="birthday-day" class="birthday-select">
+                            <option value="">请选择日</option>
+                        </select>
+                    </div>
+                    <div class="step-actions">
+                        <button class="prev-btn" id="step2-prev">← 上一步</button>
+                        <button class="next-btn" id="step2-next">下一步 →</button>
+                    </div>
+                </div>
+                
+                <!-- 步骤3：条款和条件 -->
+                <div class="register-step" id="step-3">
+                    <div class="step-icon">📜</div>
+                    <h2>条款和条件</h2>
+                    <p>请阅读并同意以下条款</p>
+                    <div class="terms-container">
+                        <div class="terms-content" id="terms-content">
+                            <h3>Kirara 条款和条件</h3>
+                            <p><strong>1. 服务协议</strong></p>
+                            <p>欢迎使用 Kirara AI 助手服务（以下简称"本服务"）。本服务由 TeleVideo Inc. 提供。</p>
+                            <p><strong>2. 用户注册</strong></p>
+                            <p>用户必须完成注册流程才能使用本服务。注册时需提供用户名、生日等基本信息。联系方式和紧急联系人信息为可选填写项。</p>
+                            <p><strong>3. 隐私政策</strong></p>
+                            <p>我们尊重用户隐私，不会将用户数据用于商业目的。用户对话内容仅用于提供更好的服务体验。用户信息存储在本地，确保数据安全。</p>
+                            <p><strong>4. 使用规范</strong></p>
+                            <p>用户不得使用本服务进行违法活动。用户不得滥用本服务，包括但不限于发送垃圾信息、恶意攻击等。用户应遵守相关法律法规。</p>
+                            <p><strong>5. 免责声明</strong></p>
+                            <p>本服务提供的内容仅供参考，不构成任何建议。我们不对用户使用本服务造成的任何损失负责。本服务可能会因技术原因中断或延迟。</p>
+                            <p><strong>6. 条款更新</strong></p>
+                            <p>我们保留随时更新本条款的权利。条款更新后，用户继续使用本服务即表示同意新条款。</p>
+                        </div>
+                    </div>
+                    <label class="terms-checkbox">
+                        <input type="checkbox" id="terms-agree">
+                        <span>我已阅读并同意上述条款和条件</span>
+                    </label>
+                    <div class="step-actions">
+                        <button class="prev-btn" id="step3-prev">← 上一步</button>
+                        <button class="next-btn" id="step3-next">下一步 →</button>
+                    </div>
+                </div>
+                
+                <!-- 步骤4：联系方式（可选） -->
+                <div class="register-step" id="step-4">
+                    <div class="step-icon">📞</div>
+                    <h2>联系方式（可选）</h2>
+                    <p>这些信息仅用于紧急情况下的联系</p>
+                    <input type="text" id="contact-phone" placeholder="联系电话（可选）" maxlength="20">
+                    <input type="text" id="emergency-contact" placeholder="紧急联系人（可选）" maxlength="50">
+                    <input type="text" id="emergency-phone" placeholder="紧急联系人电话（可选）" maxlength="20">
+                    <div class="step-actions">
+                        <button class="prev-btn" id="step4-prev">← 上一步</button>
+                        <button class="next-btn" id="step4-next">下一步 →</button>
+                        <button class="skip-btn" id="step4-skip">跳过 →</button>
+                    </div>
+                </div>
+                
+                <!-- 步骤5：用户图片（可选） -->
+                <div class="register-step" id="step-5">
+                    <div class="step-icon">🖼️</div>
+                    <h2>代表您的图片（可选）</h2>
+                    <p>选择一张代表您的头像图片</p>
+                    <div class="avatar-selector">
+                        <div class="avatar-option selected" data-avatar="/apps/kirara/sprites/logos/kirara-4.png">
+                            <img src="/apps/kirara/sprites/logos/kirara-4.png" alt="默认">
+                            <span>默认</span>
+                        </div>
+                        <div class="avatar-option" data-avatar="/static/sprites/logos/user1.png">
+                            <img src="/static/sprites/logos/user1.png" alt="用户1">
+                            <span>用户1</span>
+                        </div>
+                        <div class="avatar-option" data-avatar="/static/sprites/logos/user2.png">
+                            <img src="/static/sprites/logos/user2.png" alt="用户2">
+                            <span>用户2</span>
+                        </div>
+                        <div class="avatar-option custom-upload">
+                            <input type="file" id="custom-avatar" accept="image/*">
+                            <div class="upload-placeholder">
+                                <span>+</span>
+                            </div>
+                            <span>自定义</span>
+                        </div>
+                    </div>
+                    <div class="step-actions">
+                        <button class="prev-btn" id="step5-prev">← 上一步</button>
+                        <button class="next-btn" id="step5-next">完成注册</button>
+                        <button class="skip-btn" id="step5-skip">跳过 →</button>
+                    </div>
+                </div>
+                
+                <!-- 注册成功 -->
+                <div class="register-step" id="step-success">
+                    <div class="step-icon success">🎉</div>
+                    <h2>注册成功！</h2>
+                    <p>欢迎加入 Kirara 的世界，${username}！</p>
+                    <div class="success-animation">
+                        <img src="/apps/kirara/sprites/logos/kirara-3.png" class="success-logo">
+                    </div>
+                    <button class="finish-btn" id="finish-register">开始使用</button>
+                </div>
+                
+                </div>
+        </div>
+    </div>
+    
+    <!-- 注册成功后全屏播放视频 -->
+    <div class="register-video" id="register-video">
+        <video class="video-content" id="video-content" playsinline>
+            <source src="/apps/kirara/videos/kirara-startup.mp4" type="video/mp4">
+        </video>
+        <button class="video-skip-btn" id="video-skip-btn">跳过</button>
+        <div class="video-overlay">
+            <span class="video-loading">正在加载...</span>
+        </div>
+    </div>
+    
+    <img id="backgroundImg" src="/apps/kirara/sprites/backgrounds/default.png" style="position: absolute;z-index: -1000;">
+    <header class="modern-header">
+        <div class="header-container">
+            <div class="header-left">
+                <img src="/apps/kirara/sprites/logos/kirara-1.png" alt="Kirara Logo" class="logo-img">
+                <div class="logo-text">
+                    <h1>Kirara</h1>
+                    <p>TeleVideo自研二次元AI副驾驶</p>
+                </div>
+                <div id="mode-switch-trigger">
+                    <img class="btn-icon" src="/static/sprites/logos/chatMode.png" alt="">
+                    <span class="btn-text" title="按下切换至Agent模式">Chat</span>
+                </div>
+                <div id="go-live-btn">
+                    <p>👁️‍🗨️Go Live</p>
+                    <p>通过您设备上的摄像头与Kirara实时对话！</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="user-info" id="user-info">
+                    <img id="header-avatar" src="/apps/kirara/sprites/logos/kirara-4.png" class="user-avatar">
+                    <span id="header-username" class="user-name">未登录</span>
+                </div>
+            </div>
+        </div>
+    </header>
+    <div class="page-content-wrapper">
+    <section class="main-section main-stage content-area">
+            <nav class="nav-bar">
+                <button class="nav-btn active" id="chatUIBtn" title="显示Kirara的对话与控制台信息">
+                    <span class="btn-icon">🗨</span>
+                </button>
+                <button class="nav-btn" id="toggleCharaBtn" title="调整Kirara的形象，注意！可能导致人设的改变">
+                    <span class="btn-icon">👕</span>
+                </button>
+                <button class="nav-btn" id="performanceBtn" title="查看Kirara的模型上下文，包括对话历史、人设、环境等">
+                    <span class="btn-icon">📜</span>
+                </button>
+                <button class="nav-btn" id="optionsBtn" title="调整Kirara的设置，包括语言、主题、插件等">
+                    <span class="btn-icon">🔧</span>
+                </button>
+                <button class="nav-btn" id="agentTasksBtn" title="查看 Agent 任务历史（按 task 隔离的会话）">
+                    <span class="btn-icon">🧭</span>
+                </button>
+                <button class="nav-btn" id="smart-lens-btn" title="使用智能镜头识别图像">
+                    <span class="nav-icon">👁️</span>
+                </button>
+                <button class="nav-btn" id="mute-btn" title="静音">
+                    <span class="nav-icon">🔊</span>
+                </button>
+                <button class="nav-btn special-btn" id="game-btn" title="现在TeleVideo可以养电子宠物了！使用这个功能，连接到Niji Land中的“Kirara之家”，来做客吧！">
+                    <span class="btn-icon">🏠</span>
+                    <span class="beta-tag">Beta</span>
+                </button>
+               
+                <button class="nav-btn eject-btn" id="force-eject-btn" title="强制弹出模型。注意！没有保存的对话会被清除">
+                    <span class="btn-icon">🚫</span>
+                    <span class="btn-text" id="force-eject-btn" title="强制弹出模型。注意！没有保存的对话会被清除">FORCE EJECT</span>
+                </button>
+            </nav>
+            
+            <div class="content-container side-panel">
+                <div class="container active" id="console-container">
+                    <div class="header">
+                        <h1>与Kirara对话</h1>
+                    </div>
+                    <div class="short-term-memory" id="short-term-memory">
+                        <div class="memory-section" id="memory-section" style="display: none;">
+                            <div class="memory-header">
+                                <span>📜 短期记忆</span>
+                            </div>
+                            <div class="memory-content" id="memory-content">
+                            </div>
+                            <div class="memory-separator">
+                                <hr>
+                                <span>以上为历史对话</span>
+                                <hr>
+                            </div>
+                        </div>
+                        <div class="console-placeholder">
+                            对话视图已切换到底部弹幕模式 — 请使用左侧导航切换其他面板，或点击 🗨 回到对话。
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="container" id="character-container">
+         <div class="header">
+            <h1>切换装扮</h1>
+        </div>
+        <div class="character-selector">
+                <div class="character-option" data-image="/apps/kirara/sprites/characters/kirara/common/kirara-casual1-default.png">
+                    <div class="character-preview casual1">
+                     
+                    </div>
+                    <div class="character-info">
+                        <h3>默认服装</h3>
+                        <p>Kirara的默认服装，设计得休闲而不失优雅，是绮罗日常出街时穿的衣服。不仔细看根本无法发现是个ai</p>
+                    </div>
+                </div>
+                <div class="character-option" data-image="/apps/kirara/sprites/characters/kirara/common/kirara-sightseeing-default.png">
+                    <div class="character-preview">
+                        <img src="/apps/kirara/sprites/characters/kirara/common/kirara-sightseeing-default.png" alt="绮罗" width="1012" height="1911">
+                    </div>
+                    <div class="character-info">
+                        <h3>郊游服装</h3>
+                        <p>为什么不带着绮罗出去旅行呢？女朋友的眼睛肯定会盯着不放的！（“绮罗是谁！！”）</p>
+                    </div>
+                </div>
+                <div class="character-option" data-image="/apps/kirara/sprites/characters/kirara/common/kirara-xmas-default.png">
+                    <div class="character-preview">
+                        <img src="/apps/kirara/sprites/characters/kirara/common/kirara-xmas-default.png" alt="绮罗" width="1012" height="1911">   
+                    </div>
+                    <div class="character-info">
+                        <h3>圣诞节服装</h3>
+                        <p>
+                            不得把绮罗挂在圣诞树上作为发光体。
+                        </p>
+                    </div>
+                </div>
+                <div class="character-option" data-image="/apps/kirara/sprites/characters/kirara/common/kirara-catPajama-default.png">
+                    <div class="character-preview">
+                        <img src="/apps/kirara/sprites/characters/kirara/common/kirara-catPajama-default.png" alt="绮罗">
+                    </div>
+                    <div class="character-info">
+                        <h3>猫咪睡衣</h3>
+                        <p>哈基米~🐱</p>
+                    </div>
+                </div>
+                <div class="character-option" data-image="/apps/kirara/sprites/characters/kirara/common/kirara-swimsuit-default.png">
+                    <div class="character-preview">
+                        <img src="/apps/kirara/sprites/characters/kirara/common/kirara-swimsuit-default.png" alt="绮罗">
+                    </div>
+                    <div class="character-info">
+                        <h3>海洋装扮</h3>
+                        <p>夏天~和绮罗去游泳吧！说到夏天果然泳装最棒了呢~！(●ˇ∀ˇ●)</p>
+                    </div>
+                </div>
+                <div class="character-option" data-image="/apps/kirara/sprites/characters/kirara/common/kirara-qipao-default.png">
+                    <div class="character-preview">
+                        <img src="/apps/kirara/sprites/characters/kirara/common/kirara-qipao-default.png" alt="绮罗">
+                    </div>
+                    <div class="character-info">
+                        <h3>旗袍</h3>
+                        <p>我恭喜你发财，我恭喜你精彩……最好的请过来，不好的请走开……哦礼多人不怪</p>
+                    </div>
+                </div>
+                <div class="character-option" data-image="/apps/kirara/sprites/characters/kirara/common/kirara-common-default.png">
+                    <div class="character-preview mech1">
+                        <img src="/apps/kirara/sprites/characters/kirara/common/kirara-common-default.png" alt="绮罗">
+                    </div>
+                    <div class="character-info">
+                        <h3>绮罗罗机甲 Mk.1</h3>
+                        <p>
+                            绮罗的“战斗服”，亦在本社的《Special Ops》系列游戏中登场过。
+                            （忘了天选姬吧，我当智能体养你……(*/ω＼*)）
+                        </p>
+                    </div>
+                </div>
+                <div class="character-option" data-image="/apps/kirara/sprites/characters/kirara/common/kirara-claw-default.png">
+                    <div class="character-preview ebina">
+                        <img src="/apps/kirara/sprites/characters/kirara/common/kirara-claw-default.png" alt="绮罗">
+                    </div>
+                    <div class="character-info">
+                        <h3>海老名绮罗（小⭐龙⭐虾）</h3>
+                        <p>
+                            一种claw-like agent, 她可以管理你的日程，自动回复电子邮件，查出你欠了花呗多少钱，还会威风堂堂地部署烂代码。
+                        </p>
+                    </div>
+                </div>
+                <div class="character-option">
+                    <div class="character-preview toBeContinued">
+                        <img src="/apps/kirara/sprites/logos/kirara-3.png">
+                    </div>
+                    <div class="character-info">
+                        <h3>更多款式</h3>
+                        <p>敬请期待……</p>
+                    </div>
+                </div>
+                    </div>
+                    <!-- 禁用动漫形象时的半透明蒙版：锁定整个立绘面板 -->
+                    <div class="anime-disabled-mask" id="anime-disabled-mask">
+                        <div class="anime-disabled-mask-content">
+                            <div class="anime-disabled-mask-icon">🚫</div>
+                            <h2>动漫形象已禁用</h2>
+                            <p>立绘换装已锁定，当前以 Logo 形态展示。</p>
+                            <p class="anime-disabled-mask-hint">如需恢复，请在「模型选择」中关闭「禁用动漫形象」开关。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="container" id="performance-container">
+                    <div class="header">
+                        <h1>上下文管理</h1>
+                        <p>管理您的对话历史、记忆库和提示词库</p>
+                    </div>
+                    <div class="context-content">
+                        <div class="context-tabs">
+                            <button class="context-tab active" data-tab="session">📋 短期记忆</button>
+                            <button class="context-tab" data-tab="memories">🧠 长期记忆</button>
+                            <button class="context-tab" data-tab="custom-prompts">✨ 自定义提示词</button>
+                            <button class="context-tab" data-tab="model-config">📋 模型配置</button>
+                        </div>
+
+                        <div class="context-tab-content">
+                            <!-- 短期记忆：原对话历史面板的 session 标签合并而来 -->
+                            <div class="tab-panel active" id="session-panel">
+                                <div class="panel-header">
+                                    <h2>短期记忆</h2>
+                                    <div class="panel-actions">
+                                        <button class="action-btn" id="refresh-session-history">🔄 刷新</button>
+                                    </div>
+                                </div>
+                                <div class="history-session-list" id="history-session-list">
+                                    <div class="loading-text">点击刷新加载短期记忆...</div>
+                                </div>
+                            </div>
+
+                            <div class="tab-panel" id="memories-panel">
+                                <div class="panel-header">
+                                    <h2>长期记忆库</h2>
+                                    <div class="panel-actions">
+                                        <button class="action-btn" id="refresh-memories">🔄 刷新</button>
+                                        <button class="action-btn primary" id="add-memory-btn">➕ 添加记忆</button>
+                                        <button class="action-btn danger" id="clear-memories-btn">🗑️ 清空</button>
+                                    </div>
+                                </div>
+                                <div class="memories-list" id="memories-list">
+                                    <div class="loading-text">正在加载记忆...</div>
+                                </div>
+                            </div>
+
+                            <div class="tab-panel" id="custom-prompts-panel">
+                                <div class="panel-header">
+                                    <h2>自定义提示词</h2>
+                                    <div class="panel-actions">
+                                        <button class="action-btn" id="refresh-custom-prompts">🔄 刷新</button>
+                                        <button class="action-btn primary" id="add-custom-prompt-btn">➕ 添加</button>
+                                    </div>
+                                </div>
+                                <div class="custom-prompts-list" id="custom-prompts-list">
+                                    <div class="loading-text">正在加载自定义提示词...</div>
+                                </div>
+                            </div>
+
+                            <div class="tab-panel" id="model-config-panel">
+                                <div class="panel-header">
+                                    <h2>模型配置</h2>
+                                    <button class="action-btn" id="refresh-model-config">🔄 刷新</button>
+                                </div>
+                                <div class="model-config-content" id="model-config-content">
+                                    <div class="loading-text">正在加载模型配置...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="container" id="options-container">
+                    <div class="header">
+                        <h1>选  项</h1>
+                    </div>
+                    <div class="options-tabs">
+                        <button class="options-tab" data-options-tab="basic">⚙️ 基本设置</button>
+                        <button class="options-tab" data-options-tab="user">👤 用户信息</button>
+                        <button class="options-tab" data-options-tab="usage">📊 用量管理</button>
+                        <button class="options-tab" data-options-tab="usage-time">⏱️ 使用时间</button>
+                        <button class="options-tab" data-options-tab="comm">📡 通讯接口</button>
+                        <button class="options-tab" data-options-tab="skills">🧩 技能管理</button>
+                        <button class="options-tab" data-options-tab="smtp">📧 邮件设置</button>
+                        <button class="options-tab" data-options-tab="reset">🗑️ 重置</button>
+                        <button class="options-tab" data-options-tab="about">ℹ️ 关于Kirara</button>
+                    </div>
+                    <div class="options-content">
+                        <div class="options-panel active" id="options-basic-panel">
+                            <div class="option-group">
+                                <h2>最大上下文窗口</h2>
+                                <div class="context-slider-container">
+                                    <div class="context-label">
+                                        <span class="label-text">上下文大小</span>
+                                        <span id="max-context-value" class="context-display">1024000</span>
+                                    </div>
+                                    <div class="context-slider-wrapper">
+                                        <input type="range" id="max-context-input" class="context-slider" min="65536" max="10485760" step="65536" value="1024000">
+                                    </div>
+                                    <div class="context-scale">
+                                        <span class="scale-label">64K</span>
+                                        <span class="scale-label">1M</span>
+                                        <span class="scale-label">10M</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="option-group">
+                                <h2>联机搜索</h2>
+                                <div class="switcher">
+                                    <label class="switch">
+                                        <input type="checkbox" id="online-switch">
+                                        <span class="slider round"></span>
+                                    </label>
+                                    <span class="switch-label">启用后可进行联网搜索</span>
+                                </div>
+                            </div>
+                            
+                            <div class="option-group">
+                                <h2>认知回馈(Hippo)</h2>
+                                <div class="switcher">
+                                    <label class="switch">
+                                        <input type="checkbox" id="hippo-switch">
+                                        <span class="slider round"></span>
+                                    </label>
+                                    <span class="switch-label">从用户对话中学习</span>
+                                </div>
+                            </div>
+
+                            <div class="option-group">
+                                <h2>禁用动漫形象</h2>
+                                <div class="switcher">
+                                    <label class="switch">
+                                        <input type="checkbox" id="disable-anime-switch">
+                                        <span class="slider round"></span>
+                                    </label>
+                                    <span class="switch-label">禁用动漫形象，此时形象会变为logo</span>
+                                </div>
+                            </div>
+                            
+                            <div class="option-group">
+                                <h2>云端加速</h2>
+                                <div class="switcher">
+                                    <label class="switch">
+                                        <input type="checkbox" id="cloud-accel-switch">
+                                        <span class="slider round"></span>
+                                    </label>
+                                    <span class="switch-label">启用云端加速提升响应速度</span>
+                                    <p>Powered By</p>
+                                    <img src="/static/sprites/logos/cloudflare-2.png" alt="Cloudflare" style="scale:0.5">
+                                </div>
+                            </div>
+                            <div class="option-group model-options-group">
+                                <h2>模型选择</h2>
+
+                                <div class="model-selector-row">
+                                    <label class="model-label">🎭 人设提示词</label>
+                                    <div class="persona-cards" id="persona-cards">
+                                        <div class="persona-card" data-persona="native" title="不注入 system prompt，使用模型原生人格">
+                                            <span class="persona-card-icon">🤖</span>
+                                            <div class="persona-card-text">
+                                                <span class="persona-card-name">模型原生</span>
+                                                <span class="persona-card-sub">Native · 无提示词</span>
+                                            </div>
+                                        </div>
+                                        <div class="persona-card" data-persona="jrvs" title="system=JRVS：称呼「先生」，专业、简洁、无颜文字">
+                                            <span class="persona-card-icon">🎩</span>
+                                            <div class="persona-card-text">
+                                                <span class="persona-card-name">贾维斯</span>
+                                                <span class="persona-card-sub">JRVS · 称呼「先生」</span>
+                                            </div>
+                                        </div>
+                                        <div class="persona-card" data-persona="kirara" title="system=Kirara：称呼「主人sama」，活泼甜美、女仆风">
+                                            <span class="persona-card-icon">🎀</span>
+                                            <div class="persona-card-text">
+                                                <span class="persona-card-name">绮罗</span>
+                                                <span class="persona-card-sub">Kirara · 称呼「主人sama」</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p class="model-select-hint" id="persona-hint">对应 JRVS-7B SFT 双人设，通过 system prompt 切换。</p>
+                                </div>
+
+                                <div class="model-selector-row">
+                                    <label class="model-label" for="voice-select">🔊 音声选择</label>
+                                    <div class="voice-selector-row">
+                                        <div class="model-select-wrapper">
+                                            <select id="voice-select" class="model-select">
+                                                <option value="preset:kirara">🎀 绮罗（预设 · 活泼少女音声）</option>
+                                            </select>
+                                        </div>
+                                        <button type="button" class="voice-preview-btn" id="voice-preview-btn">🔊 试听</button>
+                                    </div>
+                                    <p class="model-select-hint" id="voice-hint">AI 语音播报使用的音色，可选择预设或本机系统语音。</p>
+                                </div>
+
+                                <div class="model-selector-row">
+                                    <label class="model-label">🤖 Agent 工具</label>
+                                    <div class="switcher">
+                                        <label class="switch">
+                                            <input type="checkbox" id="agent-shell-switch">
+                                            <span class="slider round"></span>
+                                        </label>
+                                        <span class="switch-label">允许 Agent 模式执行 shell 命令（默认关闭；开启后每条命令仍需逐次审批）</span>
+                                    </div>
+                                    <p class="model-select-hint" id="agent-shell-hint">⚠️ 危险能力：命令在本机以项目根为工作目录执行，超时自动终止；rm -rf / 格式化 / 注册表 / 目录穿越等命令会被黑名单直接拒绝。</p>
+                                </div>
+                            </div>
+                            <div class="option-group config-display-group">
+                                <h2>模型配置文件</h2>
+                                <div class="config-display">
+                                    <div class="config-header">
+                                        <span class="config-icon">📋</span>
+                                        <span class="config-title">modelfile.txt</span>
+                                        <button class="config-refresh-btn" id="refresh-modelfile">🔄</button>
+                                    </div>
+                                    <pre class="config-content" id="modelfile-content">加载中...</pre>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="options-panel" id="options-user-panel">
+                            <div class="option-group user-profile-group">
+                                <div class="user-profile-content">
+                                    <div class="profile-row">
+                                        <label class="profile-label">用户名</label>
+                                        <input type="text" id="edit-username" class="profile-input" placeholder="请输入用户名" readonly>
+                                    </div>
+                                    <div class="profile-row">
+                                        <label class="profile-label">生日</label>
+                                        <div class="birthday-display">
+                                            <span id="display-birthday">未设置</span>
+                                        </div>
+                                    </div>
+                                    <div class="profile-row">
+                                        <label class="profile-label">联系电话</label>
+                                        <input type="tel" id="edit-contact-phone" class="profile-input" placeholder="请输入联系电话" readonly>
+                                    </div>
+                                    <div class="profile-row">
+                                        <label class="profile-label">紧急联系人</label>
+                                        <input type="text" id="edit-emergency-contact" class="profile-input" placeholder="请输入紧急联系人" readonly>
+                                    </div>
+                                    <div class="profile-row">
+                                        <label class="profile-label">紧急联系电话</label>
+                                        <input type="tel" id="edit-emergency-phone" class="profile-input" placeholder="请输入紧急联系电话" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="options-panel" id="options-usage-panel">
+                            <div class="option-group">
+                                <h2>当前会话用量</h2>
+                                <div class="usage-stats-block" id="usage-current-block">
+                                    <div class="usage-stat-row">
+                                        <span class="usage-stat-label">Chat 会话（default session）</span>
+                                        <span class="usage-stat-value" id="usage-chat-tokens">— / 16384 tokens</span>
+                                    </div>
+                                    <div class="usage-bar-container">
+                                        <div class="usage-bar-fill" id="usage-chat-bar"></div>
+                                        <span class="usage-bar-text" id="usage-chat-bar-text">0%</span>
+                                    </div>
+                                    <div class="usage-stat-row" style="margin-top:12px;">
+                                        <span class="usage-stat-label">Agent 当前任务</span>
+                                        <span class="usage-stat-value" id="usage-agent-tokens">未运行</span>
+                                    </div>
+                                    <div class="usage-bar-container">
+                                        <div class="usage-bar-fill" id="usage-agent-bar"></div>
+                                        <span class="usage-bar-text" id="usage-agent-bar-text">0%</span>
+                                    </div>
+                                    <div class="usage-stat-row" style="margin-top:8px;font-size:11px;color:#999;">
+                                        <span id="usage-compaction-count">本任务已触发压缩 0 次</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="option-group">
+                                <h2>防溢出策略</h2>
+                                <div class="usage-config-row">
+                                    <label class="usage-toggle-row">
+                                        <input type="checkbox" id="usage-auto-compaction" checked>
+                                        <span>启用自动压缩（超出阈值时合并早期 transcript，加权方法不调 LLM）</span>
+                                    </label>
+                                </div>
+                                <div class="usage-config-row">
+                                    <div class="usage-slider-label">
+                                        <span>压缩阈值</span>
+                                        <span class="usage-slider-value" id="usage-threshold-value">80%</span>
+                                    </div>
+                                    <input type="range" class="usage-slider" id="usage-threshold-slider" min="50" max="95" value="80" step="5">
+                                    <div class="usage-slider-hint">超出该比例时触发 transcript 滚动压缩</div>
+                                </div>
+                                <div class="usage-config-row">
+                                    <div class="usage-slider-label">
+                                        <span>保留最近 N 条</span>
+                                        <span class="usage-slider-value" id="usage-keep-recent-value">3</span>
+                                    </div>
+                                    <input type="range" class="usage-slider" id="usage-keep-recent-slider" min="1" max="10" value="3" step="1">
+                                    <div class="usage-slider-hint">压缩时保留最近 N 条原始工具调用记录</div>
+                                </div>
+                                <div class="usage-config-row">
+                                    <div class="usage-slider-label">
+                                        <span>单任务硬上限</span>
+                                        <span class="usage-slider-value" id="usage-hard-limit-value">14000</span>
+                                    </div>
+                                    <input type="range" class="usage-slider" id="usage-hard-limit-slider" min="8000" max="16000" value="14000" step="500">
+                                    <div class="usage-slider-hint">达到此值时禁用追问按钮，提示用户新开任务</div>
+                                </div>
+                                <div class="usage-config-actions">
+                                    <button class="action-btn" id="usage-save-config">💾 保存配置</button>
+                                </div>
+                            </div>
+                            <div class="option-group">
+                                <h2>任务历史统计</h2>
+                                <div class="usage-stats-block" id="usage-history-block">
+                                    <div class="usage-stat-row">
+                                        <span class="usage-stat-label">总任务数</span>
+                                        <span class="usage-stat-value" id="usage-total-tasks">—</span>
+                                    </div>
+                                    <div class="usage-stat-row">
+                                        <span class="usage-stat-label">累计 token 估算</span>
+                                        <span class="usage-stat-value" id="usage-total-tokens">—</span>
+                                    </div>
+                                    <div class="usage-stat-row">
+                                        <span class="usage-stat-label">平均每任务</span>
+                                        <span class="usage-stat-value" id="usage-avg-tokens">—</span>
+                                    </div>
+                                    <div class="usage-config-actions">
+                                        <button class="action-btn" id="usage-refresh-stats">🔄 刷新统计</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="options-panel" id="options-usage-time-panel">
+                            <div class="option-group">
+                                <h2>使用时间概览</h2>
+                                <div class="ut-stats-grid">
+                                    <div class="ut-stat-card">
+                                        <div class="ut-stat-icon">⏱️</div>
+                                        <div class="ut-stat-meta">
+                                            <div class="ut-stat-label">今日使用时长</div>
+                                            <div class="ut-stat-value" id="ut-today-time">0 分钟</div>
+                                            <div class="ut-stat-sub" id="ut-today-exchanges">0 次对话</div>
+                                        </div>
+                                    </div>
+                                    <div class="ut-stat-card">
+                                        <div class="ut-stat-icon">🪙</div>
+                                        <div class="ut-stat-meta">
+                                            <div class="ut-stat-label">今日 Token 损耗</div>
+                                            <div class="ut-stat-value" id="ut-today-tokens">0</div>
+                                            <div class="ut-stat-sub" id="ut-today-tokens-breakdown">输入 0 · 输出 0</div>
+                                        </div>
+                                    </div>
+                                    <div class="ut-stat-card">
+                                        <div class="ut-stat-icon">📅</div>
+                                        <div class="ut-stat-meta">
+                                            <div class="ut-stat-label">近 7 日累计</div>
+                                            <div class="ut-stat-value" id="ut-7d-time">0 分钟</div>
+                                            <div class="ut-stat-sub" id="ut-7d-tokens">0 tokens</div>
+                                        </div>
+                                    </div>
+                                    <div class="ut-stat-card">
+                                        <div class="ut-stat-icon">📆</div>
+                                        <div class="ut-stat-meta">
+                                            <div class="ut-stat-label">近 30 日累计</div>
+                                            <div class="ut-stat-value" id="ut-30d-time">0 分钟</div>
+                                            <div class="ut-stat-sub" id="ut-30d-tokens">0 tokens</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="ut-config-actions">
+                                    <button class="action-btn" id="ut-refresh">🔄 刷新统计</button>
+                                    <button class="action-btn" id="ut-range-7">近 7 日</button>
+                                    <button class="action-btn primary" id="ut-range-14">近 14 日</button>
+                                    <button class="action-btn" id="ut-range-30">近 30 日</button>
+                                </div>
+                            </div>
+                            <div class="option-group">
+                                <h2>每日 Token 限制</h2>
+                                <p>你知道吗？</p>
+                                <p>每天和人工智能长舌平均浪费2个小时，一周就是14个小时，一年365天就有8760个小时。这个时间可以练出漂亮的马甲线，日语二级，掌握一门新的编程语言，学会10道拿手菜。把和人工智能聊天的时间拿来做这些难道不香吗？</p>
+                                <div class="ut-limit-block" id="ut-limit-block">
+                                    <div class="ut-limit-row">
+                                        <label class="usage-toggle-row">
+                                            <input type="checkbox" id="ut-limit-enabled">
+                                            <span>启用每日 Token 限制（达到上限后将禁止发送新消息）</span>
+                                        </label>
+                                    </div>
+                                    <div class="ut-limit-row">
+                                        <div class="usage-slider-label">
+                                            <span>每日上限（限制器）</span>
+                                            <span class="usage-slider-value" id="ut-limit-value">50,000 tokens</span>
+                                        </div>
+                                        <input type="range" class="usage-slider" id="ut-limit-slider" min="10000" max="200000" value="50000" step="5000">
+                                        <div class="usage-slider-hint">今日用量达到此值时，发送按钮将被禁用</div>
+                                    </div>
+                                    <div class="ut-limit-row ut-limit-progress-row">
+                                        <span class="ut-limit-progress-label">今日进度</span>
+                                        <div class="usage-bar-container">
+                                            <div class="usage-bar-fill" id="ut-limit-bar"></div>
+                                            <span class="usage-bar-text" id="ut-limit-bar-text">0%</span>
+                                        </div>
+                                    </div>
+                                    <div class="ut-limit-warning" id="ut-limit-warning">⚠️ 今日 Token 用量已达上限，发送已禁用</div>
+                                    <div class="ut-limit-row ut-limit-lock-row">
+                                        <label class="usage-toggle-row">
+                                            <input type="checkbox" id="ut-limit-locked">
+                                            <span id="ut-limit-lock-label">🔒 锁定限制器（锁定后无法更改上限与开关，需先解锁）</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="option-group">
+                                <h2>每日使用时间趋势</h2>
+                                <div class="ut-chart-wrap">
+                                    <svg id="ut-time-chart" class="ut-chart" viewBox="0 0 800 300" preserveAspectRatio="xMidYMid meet"></svg>
+                                    <div class="ut-chart-empty" id="ut-time-chart-empty">暂无使用时间数据，与 Kirara 对话后将自动统计</div>
+                                </div>
+                            </div>
+                            <div class="option-group">
+                                <h2>每日 Token 损耗趋势</h2>
+                                <div class="ut-chart-wrap">
+                                    <svg id="ut-token-chart" class="ut-chart" viewBox="0 0 800 300" preserveAspectRatio="xMidYMid meet"></svg>
+                                    <div class="ut-chart-empty" id="ut-token-chart-empty">暂无 Token 损耗数据，与 Kirara 对话后将自动统计</div>
+                                </div>
+                                <div class="ut-legend">
+                                    <span class="ut-legend-item"><span class="ut-legend-dot ut-legend-input"></span>输入 Token</span>
+                                    <span class="ut-legend-item"><span class="ut-legend-dot ut-legend-output"></span>输出 Token</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="options-panel" id="options-comm-panel">
+                            <!-- 网关配置卡片 -->
+                            <div class="option-group">
+                                <h2>网关配置</h2>
+                                <div class="comm-gateway-status" id="comm-gateway-status">
+                                    <span class="comm-status-dot" id="comm-status-dot"></span>
+                                    <span class="comm-status-text" id="comm-status-text">检测中...</span>
+                                </div>
+                                <div class="comm-form-row">
+                                    <label>Socket URL</label>
+                                    <input type="text" id="comm-gateway-socket-url" class="comm-form-input" placeholder="ws://127.0.0.1:8080">
+                                </div>
+                                <div class="comm-form-row">
+                                    <label>Token</label>
+                                    <input type="password" id="comm-gateway-token" class="comm-form-input" placeholder="网关访问令牌">
+                                </div>
+                                <div class="comm-form-row">
+                                    <label>Session Key</label>
+                                    <input type="text" id="comm-gateway-session-key" class="comm-form-input" placeholder="会话密钥">
+                                </div>
+                                <div class="comm-form-row">
+                                    <label>语言</label>
+                                    <select id="comm-gateway-language" class="comm-form-select">
+                                        <option value="zh-CN">简体中文</option>
+                                        <option value="en-US">English</option>
+                                    </select>
+                                </div>
+                                <div class="comm-actions">
+                                    <button class="action-btn" id="comm-gateway-save">💾 保存网关配置</button>
+                                    <button class="action-btn" id="comm-gateway-refresh">🔄 刷新状态</button>
+                                </div>
+                            </div>
+
+                            <!-- iMessage 接口卡片 -->
+                            <div class="option-group">
+                                <h2>iMessage 接口</h2>
+                                <div class="comm-iface-card" id="comm-imessage-card">
+                                    <div class="comm-iface-header">
+                                        <span class="comm-iface-name">iMessage</span>
+                                        <span class="comm-iface-status" id="comm-imessage-status">未检测</span>
+                                    </div>
+                                    <div class="comm-iface-body">
+                                        <p class="comm-iface-hint">macOS Messages 互通接口，需在 Mac 上运行 Bridge 服务</p>
+                                        <div class="comm-iface-actions">
+                                            <button class="action-btn" id="comm-imessage-check">🔍 检测可用性</button>
+                                            <button class="action-btn comm-connect-btn" id="comm-imessage-connect">🔗 连接</button>
+                                            <button class="action-btn comm-disconnect-btn" id="comm-imessage-disconnect" disabled>⏹ 断开</button>
+                                        </div>
+                                        <div class="comm-send-form" id="comm-imessage-send-form">
+                                            <input type="text" id="comm-imessage-recipient" class="comm-form-input" placeholder="接收方手机号/邮箱">
+                                            <input type="text" id="comm-imessage-msg" class="comm-form-input" placeholder="消息内容">
+                                            <button class="action-btn" id="comm-imessage-send">📤 发送</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- QQ 接口卡片 -->
+                            <div class="option-group">
+                                <h2>QQ 接口</h2>
+                                <div class="comm-iface-card" id="comm-qq-card">
+                                    <div class="comm-iface-header">
+                                        <span class="comm-iface-name">QQ</span>
+                                        <span class="comm-iface-status" id="comm-qq-status">未检测</span>
+                                    </div>
+                                    <div class="comm-iface-body">
+                                        <div class="comm-iface-actions">
+                                            <button class="action-btn" id="comm-qq-check">🔍 检测可用性</button>
+                                            <button class="action-btn comm-connect-btn" id="comm-qq-connect">🔗 连接</button>
+                                            <button class="action-btn comm-disconnect-btn" id="comm-qq-disconnect" disabled>⏹ 断开</button>
+                                            <button class="action-btn" id="comm-qq-refresh-list">🔄 刷新好友/群列表</button>
+                                        </div>
+                                        <div class="comm-send-form">
+                                            <select id="comm-qq-target-type" class="comm-form-select">
+                                                <option value="friend">好友</option>
+                                                <option value="group">群</option>
+                                            </select>
+                                            <input type="text" id="comm-qq-target-id" class="comm-form-input" placeholder="目标 QQ 号/群号">
+                                            <input type="text" id="comm-qq-msg" class="comm-form-input" placeholder="消息内容">
+                                            <button class="action-btn" id="comm-qq-send">📤 发送</button>
+                                        </div>
+                                        <details class="comm-qq-lists">
+                                            <summary>好友/群列表</summary>
+                                            <div class="comm-qq-list-grid">
+                                                <div>
+                                                    <h4>好友</h4>
+                                                    <ul id="comm-qq-friends" class="comm-list"><li class="comm-empty">未加载</li></ul>
+                                                </div>
+                                                <div>
+                                                    <h4>群</h4>
+                                                    <ul id="comm-qq-groups" class="comm-list"><li class="comm-empty">未加载</li></ul>
+                                                </div>
+                                            </div>
+                                        </details>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="options-panel" id="options-skills-panel">
+                            <div class="option-group">
+                                <div class="skills-panel-header">
+                                    <h2>技能管理</h2>
+                                    <button class="action-btn" id="skill-add-btn">➕ 添加技能</button>
+                                </div>
+                                <p class="skills-panel-hint">自定义技能会以提示词形式注入对话，扩展绮罗罗的能力。关闭开关可临时停用某项技能而不删除。</p>
+                                <div class="skills-list" id="skills-list">
+                                    <div class="loading-text">点击「添加技能」创建第一个技能...</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="options-panel" id="options-about-panel">
+                            <div class="option-group about-group">
+                                <div class="about-content">
+                                    <div class="about-logo">
+                                        <img src="/apps/kirara/sprites/logos/kirara-3.png" alt="Kirara">
+                                    </div>
+                                    <div class="about-info">
+                                        <h2>Kirara</h2>
+                                        <p class="about-subtitle">TeleVideo自研二次元AI副驾驶</p>
+                                        <div class="about-version">版本: 1.2.1</div>
+                                        <div class="about-license">Licensed by CC BY-SA-4.0</div>
+                                    </div>
+                                </div>
+                                <div class="about-description">
+                                    <div style="text-align: center;">
+                                        <img src="/static/sprites/logos/computerPartner.png" width="100" height="auto" title="Computer Partner" style="border-radius: 6px;">
+                                        <h1>ComPanion,</h1>
+                                        <h1>CoPilot,</h1>
+                                        <h1>Command Post.</h1>
+                                        <h1>Kirara, Your CP.</h1>
+                                    </div>
+                                    <p>Kirara（绮罗）是由TeleVideo极客部门开发的AI助手，采用先进的大语言模型技术，具备记忆能力、情感理解和多模态交互功能。</p>
+                                    <p>绮罗罗致力于成为您最贴心的AI伙伴，随时为您提供帮助和陪伴唷！(●ˇ∀ˇ●)</p>
+                                    <img src="/static/sprites/logos/cyberProtection.png" width="100" height="auto" title="Cyber Protection" style="border-radius: 6px;">
+                                    <img src="/static/sprites/logos/contentRating-teen.png" width="100" height="auto" title="Teen Content" style="border-radius: 6px;">
+                                    <h1>赛博守护计划</h1>
+                                    <small>根据TeleVideo相关协议，参与了这个计划的组织和其内容需要确保内容不会出现于不适合的年龄段群体。</small>
+                                    <h1>本应用适合12岁及以上人群使用。</h1>
+                                    <hr>
+                                    <h3>
+                                        在本应用中，你可能会接触到以下内容：<br>
+                                        ·人工智能生成内容<br>
+                                        ·拟人对话互动<br>
+                                        ·脏话和侮辱性情节<br>
+                                        ·描述犯罪的情节<br>
+                                        ·裸露和性暗示（包括内衣、泳装和描述性语言）<br>
+                                        ·虚拟情感关系<br>
+                                        ·保健元素
+                                    </h3>
+                                    <hr>
+                                    <h2>
+                                        警告：含有沉迷使用风险。<br>
+                                        人工智能可能会生成不准确的内容造成情绪问题，或者造成对其功能的依赖性。如果你感觉自己出现了以下情况：<br>
+                                        ·惊恐发作<br>
+                                        ·过度换气<br>
+                                        ·恼怒<br>
+                                        ·强迫性行为<br>
+                                        ·情感依赖性<br>
+                                        请马上停止使用该程序，并求助于真人专业人员。
+                                    </h2>
+                                    <hr>
+                                    <h2>
+                                        警告：可能对设备造成不可逆损伤。<br>
+                                        Kirara具有Agent能力，它很可能会绕过沙箱直接操作您设备上的敏感数据，导致数据泄露或系统崩溃。
+                                        如果Kirara出现了失控情况，请马上按下”Force Eject“按钮(🚫)，强制退出该应用。
+                                    </h2>
+                                    <hr>
+                                </div>
+                                <div class="about-partners">
+                                    <h3>项目合作伙伴</h3>
+                                    <div class="partners-list">
+                                        <img src="/static/sprites/logos/ollama.png" width="100" height="32" title="Ollama" style="border-radius: 6px;">
+                                        <img src="/static/sprites/logos/aws-2.png" width="80" height="auto" style="border-radius: 6px;">
+                                        <img src="/static/sprites/logos/qwen.png" width="80" height="auto" style="border-radius: 6px;">
+                                        <img src="/static/sprites/logos/trae-2.png" width="80" height="auto" style="border-radius: 6px;">
+                                        <img src="/static/sprites/logos/github-2.png" width="80" height="auto" style="border-radius: 6px;">
+                                        <img src="/static/sprites/logos/nvidia.png" width="80" height="auto" style="border-radius: 6px;">
+                                        <img src="/static/sprites/logos/autodl - 副本.png" width="80" height="auto" style="border-radius: 6px;">
+                                    </div>
+                                </div>
+                                <div class="about-contact">
+                                    <h1>联系我们</h1>
+                                    <h3><a href="mailto:1066344121@qq.com">巴里君国内唯一邮箱：1066344121@qq.com</a></h3>
+                                    <h3><a href="https://tvehub.com/ai" target="_blank">📺TeleVideo</a></h3>
+                                    <h3><a href="https://github.com/NOIC-NETWORK" target="_blank">🐱GitHub</a></h3>
+                                    <h3><a href="https://ollama.com/televideo-ai/" target="_blank">🦙Ollama</a></h3>
+                                </div>
+                                <div class="about-copyright">
+                                    <p>©2025 TeleVideo Inc. All rights reserved.</p>
+                                    <a href="https://tvehub.com/blogs/" target="_blank">TeleVideo</a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SMTP 邮件设置面板 -->
+                        <div class="options-panel" id="options-smtp-panel">
+                            <div class="option-group">
+                                <h2>📧 SMTP 邮件服务</h2>
+                                <p class="option-desc">用于发送重置验证码。未配置时验证码仅在服务器控制台打印（开发调试模式）。</p>
+
+                                <div class="smtp-grid">
+                                    <div class="form-row">
+                                        <label>SMTP 服务器地址</label>
+                                        <input type="text" id="smtp-host" placeholder="smtp.qq.com / smtp.gmail.com">
+                                    </div>
+                                    <div class="form-row">
+                                        <label>端口</label>
+                                        <input type="number" id="smtp-port" placeholder="465" value="465">
+                                    </div>
+                                    <div class="form-row">
+                                        <label>账号（完整邮箱）</label>
+                                        <input type="text" id="smtp-user" placeholder="your@qq.com">
+                                    </div>
+                                    <div class="form-row">
+                                        <label>授权码 / 密码</label>
+                                        <input type="password" id="smtp-pass" placeholder="***" autocomplete="off">
+                                    </div>
+                                    <div class="form-row">
+                                        <label>发件地址（空则同账号）</label>
+                                        <input type="text" id="smtp-from" placeholder="your@qq.com">
+                                    </div>
+                                    <div class="form-row">
+                                        <label>SSL / TLS</label>
+                                        <select id="smtp-ssl">
+                                            <option value="true" selected>启用 SSL（推荐 465 端口）</option>
+                                            <option value="false">启用 STARTTLS（587 端口）</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="action-row">
+                                    <button id="smtp-save-btn" class="btn-primary">💾 保存 SMTP 配置</button>
+                                    <span id="smtp-save-status" class="save-status"></span>
+                                </div>
+
+                                <div class="help-text">
+                                    <h4>💡 常见 SMTP 配置</h4>
+                                    <ul>
+                                        <li><b>QQ 邮箱</b>：smtp.qq.com:465 SSL，授权码在 QQ 邮箱 → 设置 → 账户 里生成</li>
+                                        <li><b>Gmail</b>：smtp.gmail.com:587 STARTTLS，需开启应用专用密码</li>
+                                        <li><b>Outlook</b>：smtp.office365.com:587 STARTTLS</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 重置面板 -->
+                        <div class="options-panel" id="options-reset-panel">
+                            <div class="option-group reset-group">
+                                <h2>🗑️ 重置所有个人数据</h2>
+                                <p class="reset-warning">此操作将<b>不可逆</b>地清除以下内容：</p>
+                                <ul class="reset-targets">
+                                    <li>✅ 所有对话会话（sessions/*.json）</li>
+                                    <li>✅ 短期记忆（buffer.txt）</li>
+                                    <li>✅ 长期记忆（mem.txt / mem.md）</li>
+                                    <li>✅ ChromaDB 向量化记忆库</li>
+                                    <li>✅ 个性化知识库（knowledge_base.md）</li>
+                                    <li>⚠️ 用户设置（options.json → 恢复默认值）</li>
+                                    <li>❌ <b>不会删除</b> user.json 注册信息</li>
+                                </ul>
+
+                                <div class="reset-section">
+                                    <h3>第二步：获取验证码</h3>
+                                    <div class="form-row">
+                                        <label>收件邮箱</label>
+                                        <input type="email" id="reset-email" placeholder="your@email.com">
+                                    </div>
+                                    <div class="action-row">
+                                        <button id="reset-send-btn" class="btn-secondary">📤 发送验证码</button>
+                                        <span id="reset-send-status" class="save-status"></span>
+                                    </div>
+                                </div>
+
+                                <div class="reset-section" id="reset-code-section" style="display:none;">
+                                    <h3>第三步：输入验证码并执行重置</h3>
+                                    <div class="form-row">
+                                        <label>6 位验证码</label>
+                                        <input type="text" id="reset-code" maxlength="6" placeholder="ABC123" style="text-transform:uppercase;letter-spacing:0.3em;">
+                                    </div>
+                                    <div class="action-row">
+                                        <button id="reset-execute-btn" class="btn-danger">⛔ 确认重置</button>
+                                        <span id="reset-execute-status" class="save-status"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="container" id="agent-tasks-container">
+                    <div class="header">
+                        <h1>任务历史</h1>
+                    </div>
+                    <div class="panel-header">
+                        <h2>任务列表</h2>
+                        <div class="panel-actions">
+                            <button class="action-btn" id="refresh-agent-tasks">🔄 刷新</button>
+                        </div>
+                    </div>
+                    <div class="agent-tasks-list" id="agent-tasks-list">
+                        <div class="loading-text">点击刷新加载 Agent 任务...</div>
+                    </div>
+                </div>
+            </div>
+
+        <div class="kirara-area kirara-stage">
+            <canvas id="kirara-bg-canvas" class="kirara-bg-canvas"></canvas>
+            <div class="kirara-container" id="kirara-container">
+                <img src="/apps/kirara/sprites/characters/kirara/common/kirara-casual1-default.svg" id="kirara-img" alt="Kirara">
+                <div class="speech-bubble" id="speech-bubble" style="visibility: hidden;">
+                    <div class="speech-content" id="speech-content">你好，我是Kirara。</div>
+                </div>
+            </div>
+        </div>
+        <div class="chat-overlay" id="chat-overlay">
+            <button id="new-chat-btn" class="new-chat-btn" title="开始一段全新的对话">✦ 新对话</button>
+            <div class="chat-container" id="chat-container">
+                <div class="message ai-message">
+                    <img src="/apps/kirara/sprites/logos/kirara-4.png" alt="Kirara" class="avatar">
+                    <div class="message-content-wrapper">
+                        <div class="message-content">
+                            您~好~❇！我是绮~罗~罗❤，我是你的AI副驾驶哦！有什么可以帮助您的吗？
+                        </div>
+                        <div class="message-time">刚刚</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="input-bar" id="input-bar">
+            <div class="input-area" id="input-area">
+                <div class="loading-indicator" id="loading-indicator">
+                <div class="loading-spinner"></div>
+                <span id="loading-text">正在生成回复...</span>
+            </div>
+                <textarea id="user-input" placeholder="输入您的消息..." autocomplete="off"></textarea>
+                <button id="doc-btn" title="上传文件">📎</button>
+                <div class="think-mode-dropdown">
+                    <button id="deep-think-btn" class="dropdown-toggle" title="思考模式">
+                        <img src="/static/sprites/logos/modelO-disabled.png" alt="低能耗模式" class="mode-icon">
+                        <span class="mode-label">低能耗</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="dropdown-menu">
+                        <button class="dropdown-item" data-mode="low" title="低能耗模式">
+                            <img src="/static/sprites/logos/modelO-disabled.png" alt="低能耗模式">
+                            <span>低能耗模式</span>
+                        </button>
+                        <button class="dropdown-item" data-mode="balanced" title="平衡模式">
+                            <img src="/static/sprites/logos/modelO.png" alt="平衡模式">
+                            <span>平衡模式</span>
+                        </button>
+                        <button class="dropdown-item" data-mode="performance" title="性能模式（注意！可能会导致设备过热或性能下降）">
+                            <img src="/static/sprites/logos/modelO-overdrive.png" alt="性能模式">
+                            <span>性能模式  ⚠</span>
+                        </button>
+                    </div>
+                </div>
+                <button id="code-mode-btn" title="启动代码模式"><img src="/static/sprites/logos/netrunner-disabled.png" alt="代码模式"></button>
+                <button id="send-btn" title="发送">
+                    <img src="/static/sprites/logos/kirara-submit.png" alt="发送" class="send-btn-icon">
+                    <span class="send-btn-stop" title="停止生成">■</span>
+                    <div class="send-btn-spinner"></div>
+                </button>
+            </div>
+        </div>
+    </section>
+    
+
+    <!-- 智能镜头容器 -->
+    <div id="smart-lens-container" class="smart-lens-overlay">
+        <div class="smart-lens-content">
+            <div class="smart-lens-header">
+                <h2>👁️ 绮罗智能镜头</h2>
+                <button class="close-lens-btn" id="close-lens-btn">✕</button>
+            </div>
+            
+            <div class="smart-lens-view">
+                <div class="crosshair-overlay">
+                    <img src="/apps/kirara/sprites/crosshair.png" alt="准星" class="crosshair-img">
+                </div>
+                <video id="camera-feed" class="camera-feed" autoplay playsinline></video>
+                <img id="capture-image" class="capture-image" alt="截图">
+            </div>
+            
+            <div class="smart-lens-controls">
+                <button class="capture-btn" id="capture-btn">
+                    <span class="btn-icon">📷</span>
+                    <span class="btn-text">截图识别</span>
+                </button>
+            </div>
+            
+            <div class="smart-lens-result" id="recognition-result">
+                <p class="result-placeholder">点击"截图识别"按钮开始图像识别</p>
+            </div>
+        </div>
+    </div>
+        </div> <!-- Close page-content-wrapper -->
+    <div style="position:fixed;top: 10%;left: 80%;z-index: 1000;pointer-events:none;">
+        <!--防伪标识-->
+        <img src="/static/sprites/logos/kirara-1.png" style="scale: 0.5;opacity: 0.5;">
+    </div>
+    <!-- Go Live 容器 -->
+    <div id="go-live-container" style="visibility: hidden;">
+
+    <!-- 消息提示 -->
+    <div id="toast-message" class="toast-message"></div>
+
+    <!-- 技能编辑弹窗 -->
+    <div id="skill-editor-modal" class="skill-editor-overlay">
+        <div class="skill-editor-dialog">
+            <div class="skill-editor-header">
+                <h3 id="skill-editor-title">添加技能</h3>
+                <button class="skill-editor-close" id="skill-editor-close" title="关闭">✕</button>
+            </div>
+            <div class="skill-editor-body">
+                <div class="skill-form-row">
+                    <label for="skill-name-input">技能名称 <span class="skill-required">*</span></label>
+                    <input type="text" id="skill-name-input" class="skill-form-input" maxlength="50" placeholder="如：翻译助手">
+                </div>
+                <div class="skill-form-row">
+                    <label for="skill-desc-input">简要描述</label>
+                    <input type="text" id="skill-desc-input" class="skill-form-input" maxlength="200" placeholder="一句话说明技能用途">
+                </div>
+                <div class="skill-form-row">
+                    <label for="skill-content-input">技能内容（提示词）<span class="skill-required">*</span></label>
+                    <textarea id="skill-content-input" class="skill-form-textarea" maxlength="8000" placeholder="详细描述技能的行为规则、触发条件、输出格式等。将以 system prompt 形式注入对话。"></textarea>
+                    <div class="skill-form-counter" id="skill-content-counter">0 / 8000</div>
+                </div>
+                <div class="skill-form-row skill-form-row-inline">
+                    <label class="skill-toggle-label">
+                        <input type="checkbox" id="skill-enabled-input" checked>
+                        <span>启用此技能</span>
+                    </label>
+                </div>
+            </div>
+            <div class="skill-editor-footer">
+                <button class="action-btn" id="skill-cancel-btn">取消</button>
+                <button class="action-btn skill-save-btn" id="skill-save-btn">💾 保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 启动画面逻辑
+        document.addEventListener('DOMContentLoaded', function() {
+            const splashScreen = document.getElementById('splash-screen');
+            const splashContent = document.getElementById('splash-content');
+            const startButton = document.getElementById('start-button');
+            const registerScreen = document.getElementById('register-screen');
+            
+            function hideSplashScreen() {
+                splashScreen.classList.add('splash-fade-out');
+                setTimeout(() => {
+                    splashScreen.style.display = 'none';
+                }, 500);
+            }
+            
+            function showRegisterScreen() {
+                splashContent.classList.add('content-fade-out');
+                setTimeout(() => {
+                    hideSplashScreen();
+                    registerScreen.style.display = 'flex';
+                    setTimeout(() => {
+                        registerScreen.classList.add('show');
+                    }, 50);
+                }, 300);
+            }
+            
+            async function checkRegistered() {
+                try {
+                    const response = await fetch('/api/kirara/user/status');
+                    const result = await response.json();
+                    
+                    if (result.success && result.is_registered) {
+                        localStorage.setItem('kirara_registered', 'true');
+                        hideSplashScreen();
+                        loadUserInfo();
+                    } else {
+                        splashScreen.style.display = 'flex';
+                    }
+                } catch (error) {
+                    console.error('检查注册状态失败:', error);
+                    const registered = localStorage.getItem('kirara_registered');
+                    if (registered) {
+                        hideSplashScreen();
+                        loadUserInfo();
+                    } else {
+                        splashScreen.style.display = 'flex';
+                    }
+                }
+            }
+            
+            checkRegistered();
+            
+            startButton.addEventListener('click', async function() {
+                try {
+                    const response = await fetch('/api/kirara/user/status');
+                    const result = await response.json();
+                    
+                    if (result.success && result.is_registered) {
+                        localStorage.setItem('kirara_registered', 'true');
+                        hideSplashScreen();
+                        loadUserInfo();
+                    } else {
+                        showRegisterScreen();
+                    }
+                } catch (error) {
+                    console.error('检查注册状态失败:', error);
+                    const registered = localStorage.getItem('kirara_registered');
+                    if (registered) {
+                        hideSplashScreen();
+                        loadUserInfo();
+                    } else {
+                        showRegisterScreen();
+                    }
+                }
+            });
+            
+            // 注册流程逻辑
+            let currentStep = 1;
+            const maxSteps = 5;
+            const userData = {
+                username: '',
+                birthday: { year: '', month: '', day: '' },
+                agreedTerms: false,
+                contactPhone: '',
+                emergencyContact: '',
+                emergencyPhone: '',
+                avatar: '/apps/kirara/sprites/logos/kirara-4.png'
+            };
+            
+            function updateProgress(step) {
+                currentStep = step;
+                const progressFill = document.getElementById('progress-fill');
+                const steps = document.querySelectorAll('.progress-steps .step');
+                
+                if (progressFill) {
+                    progressFill.style.width = `${(step / maxSteps) * 100}%`;
+                }
+                
+                steps.forEach((s, index) => {
+                    if (index + 1 === step) {
+                        s.classList.add('active');
+                    } else if (index + 1 < step) {
+                        s.classList.add('completed');
+                    } else {
+                        s.classList.remove('active', 'completed');
+                    }
+                });
+                
+                document.querySelectorAll('.register-step').forEach(stepEl => {
+                    stepEl.classList.remove('active');
+                });
+                
+                const targetStep = document.getElementById(`step-${step}`);
+                if (targetStep) {
+                    targetStep.classList.add('active');
+                }
+            }
+            
+            function goToStep(step) {
+                if (step >= 1 && step <= maxSteps) {
+                    updateProgress(step);
+                }
+            }
+            
+            function nextStep() {
+                if (currentStep < maxSteps) {
+                    updateProgress(currentStep + 1);
+                }
+            }
+            
+            function prevStep() {
+                if (currentStep > 1) {
+                    updateProgress(currentStep - 1);
+                }
+            }
+            
+            // 步骤1：用户名
+            document.getElementById('step1-next').addEventListener('click', function() {
+                const username = document.getElementById('username-input').value.trim();
+                if (!username) {
+                    showToast('请输入您的名字', 'error');
+                    return;
+                }
+                userData.username = username;
+                nextStep();
+            });
+            
+            // 步骤2：生日（下拉菜单）
+            function initBirthdaySelectors() {
+                const yearSelect = document.getElementById('birthday-year');
+                const monthSelect = document.getElementById('birthday-month');
+                const daySelect = document.getElementById('birthday-day');
+                
+                for (let year = 2026; year >= 1990; year--) {
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = year;
+                    yearSelect.appendChild(option);
+                }
+                
+                for (let month = 1; month <= 12; month++) {
+                    const option = document.createElement('option');
+                    option.value = month.toString().padStart(2, '0');
+                    option.textContent = month + '月';
+                    monthSelect.appendChild(option);
+                }
+                
+                function updateDays() {
+                    const year = yearSelect.value;
+                    const month = parseInt(monthSelect.value);
+                    daySelect.innerHTML = '<option value="">请选择日</option>';
+                    
+                    if (!year || !month) return;
+                    
+                    const daysInMonth = new Date(year, month, 0).getDate();
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        const option = document.createElement('option');
+                        option.value = day.toString().padStart(2, '0');
+                        option.textContent = day + '日';
+                        daySelect.appendChild(option);
+                    }
+                }
+                
+                yearSelect.addEventListener('change', updateDays);
+                monthSelect.addEventListener('change', updateDays);
+            }
+            
+            initBirthdaySelectors();
+            
+            document.getElementById('step2-prev').addEventListener('click', prevStep);
+            document.getElementById('step2-next').addEventListener('click', function() {
+                const year = document.getElementById('birthday-year').value;
+                const month = document.getElementById('birthday-month').value;
+                const day = document.getElementById('birthday-day').value;
+                
+                if (!year || !month || !day) {
+                    showToast('请完整选择出生日期', 'error');
+                    return;
+                }
+                
+                userData.birthday = {
+                    year: year,
+                    month: month,
+                    day: day
+                };
+                
+                nextStep();
+            });
+            
+            // 步骤3：条款
+            document.getElementById('step3-prev').addEventListener('click', prevStep);
+            document.getElementById('step3-next').addEventListener('click', function() {
+                const agreed = document.getElementById('terms-agree').checked;
+                if (!agreed) {
+                    showToast('请先阅读并同意条款和条件', 'error');
+                    return;
+                }
+                userData.agreedTerms = true;
+                nextStep();
+            });
+            
+            // 步骤4：联系方式
+            document.getElementById('step4-prev').addEventListener('click', prevStep);
+            document.getElementById('step4-next').addEventListener('click', function() {
+                userData.contactPhone = document.getElementById('contact-phone').value.trim();
+                userData.emergencyContact = document.getElementById('emergency-contact').value.trim();
+                userData.emergencyPhone = document.getElementById('emergency-phone').value.trim();
+                nextStep();
+            });
+            document.getElementById('step4-skip').addEventListener('click', nextStep);
+            
+            // 步骤5：头像
+            document.querySelectorAll('.avatar-option').forEach(opt => {
+                opt.addEventListener('click', function() {
+                    if (this.classList.contains('custom-upload')) return;
+                    document.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected'));
+                    this.classList.add('selected');
+                    userData.avatar = this.dataset.avatar;
+                });
+            });
+            
+            document.getElementById('custom-avatar').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        userData.avatar = event.target.result;
+                        document.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected'));
+                        e.target.parentElement.classList.add('selected');
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+            
+            document.getElementById('step5-prev').addEventListener('click', prevStep);
+            document.getElementById('step5-skip').addEventListener('click', function() {
+                completeRegistration();
+            });
+            document.getElementById('step5-next').addEventListener('click', completeRegistration);
+            
+            async function completeRegistration() {
+                try {
+                    const response = await fetch('/api/kirara/user/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(userData)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        document.querySelectorAll('.register-step').forEach(stepEl => {
+                            stepEl.classList.remove('active');
+                        });
+                        document.getElementById('step-success').classList.add('active');
+                        
+                        document.querySelector('#step-success p').textContent = 
+                            `欢迎加入 Kirara 的世界，${userData.username}！`;
+                        
+                        localStorage.setItem('kirara_registered', 'true');
+                        localStorage.setItem('kirara_user_data', JSON.stringify(userData));
+                        
+                        console.log('[Register] 用户数据已保存到服务器');
+                    } else {
+                        showToast('注册失败: ' + result.message, 'error');
+                    }
+                } catch (error) {
+                    console.error('[Register] 保存用户数据失败:', error);
+                    showToast('保存用户数据失败，请重试', 'error');
+                }
+            }
+            
+            document.getElementById('finish-register').addEventListener('click', function() {
+                document.getElementById('step-success').classList.remove('active');
+                const registerVideo = document.getElementById('register-video');
+                const videoContent = document.getElementById('video-content');
+                const videoSkipBtn = document.getElementById('video-skip-btn');
+                const videoOverlay = document.querySelector('.video-overlay');
+                
+                registerVideo.style.display = 'flex';
+                
+                videoContent.play().then(() => {
+                    videoOverlay.style.display = 'none';
+                    videoSkipBtn.style.display = 'block';
+                    console.log('[Register] 视频播放开始');
+                }).catch((error) => {
+                    console.log('[Register] 视频播放失败:', error);
+                    hideRegisterVideo();
+                });
+                
+                videoContent.addEventListener('ended', hideRegisterVideo);
+                videoContent.addEventListener('error', function() {
+                    console.log('[Register] 视频加载失败');
+                    hideRegisterVideo();
+                });
+                videoSkipBtn.addEventListener('click', hideRegisterVideo);
+                
+                function hideRegisterVideo() {
+                    videoContent.pause();
+                    registerVideo.style.display = 'none';
+                    registerScreen.classList.remove('show');
+                    setTimeout(() => {
+                        registerScreen.style.display = 'none';
+                        loadUserInfo();
+                    }, 500);
+                }
+            });
+            
+            async function loadUserInfo() {
+                try {
+                    const response = await fetch('/api/kirara/user/info');
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        const data = result.user_data;
+                        localStorage.setItem('kirara_user_data', JSON.stringify(data));
+                        
+                        const currentUser = {
+                            name: data.username,
+                            avatar: data.avatar
+                        };
+                        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                        
+                        const userStatus = document.querySelector('.user-status .status-icon');
+                        const authBtn = document.getElementById('login-btn');
+                        const headerAvatar = document.getElementById('header-avatar');
+                        const headerUsername = document.getElementById('header-username');
+                        
+                        if (userStatus && data.avatar) {
+                            userStatus.src = data.avatar;
+                            userStatus.title = data.username;
+                        }
+                        
+                        if (authBtn) {
+                            authBtn.innerHTML = `<span class="auth-icon">👤</span><span class="auth-text">${data.username}</span>`;
+                            authBtn.title = `当前用户: ${data.username}`;
+                        }
+                        
+                        if (headerAvatar) {
+                            headerAvatar.src = data.avatar || '/apps/kirara/sprites/logos/kirara-4.png';
+                        }
+                        if (headerUsername) {
+                            headerUsername.textContent = data.username;
+                        }
+                        
+                        console.log('用户信息已从服务器加载:', data.username);
+                    } else {
+                        const savedData = localStorage.getItem('kirara_user_data');
+                        if (savedData) {
+                            try {
+                                const data = JSON.parse(savedData);
+                                const currentUser = {
+                                    name: data.username,
+                                    avatar: data.avatar
+                                };
+                                sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                                
+                                const userStatus = document.querySelector('.user-status .status-icon');
+                                const authBtn = document.getElementById('login-btn');
+                                
+                                if (userStatus && data.avatar) {
+                                    userStatus.src = data.avatar;
+                                    userStatus.title = data.username;
+                                }
+                                
+                                if (authBtn) {
+                                    authBtn.innerHTML = `<span class="auth-icon">👤</span><span class="auth-text">${data.username}</span>`;
+                                    authBtn.title = `当前用户: ${data.username}`;
+                                }
+                                
+                                console.log('用户信息已从本地加载:', data.username);
+                            } catch (error) {
+                                console.error('解析用户信息失败:', error);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('加载用户信息失败:', error);
+                    const savedData = localStorage.getItem('kirara_user_data');
+                    if (savedData) {
+                        try {
+                            const data = JSON.parse(savedData);
+                            const currentUser = {
+                                name: data.username,
+                                avatar: data.avatar
+                            };
+                            sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                            
+                            const userStatus = document.querySelector('.user-status .status-icon');
+                            const authBtn = document.getElementById('login-btn');
+                            
+                            if (userStatus && data.avatar) {
+                                userStatus.src = data.avatar;
+                                userStatus.title = data.username;
+                            }
+                            
+                            if (authBtn) {
+                                authBtn.innerHTML = `<span class="auth-icon">👤</span><span class="auth-text">${data.username}</span>`;
+                                authBtn.title = `当前用户: ${data.username}`;
+                            }
+                        } catch (parseError) {
+                            console.error('解析本地用户信息失败:', parseError);
+                        }
+                    }
+                }
+            }
+            
+            // 设置界面用户信息编辑
+            function initUserProfileEdit() {
+                loadUserInfoToForm();
+            }
+            
+            async function loadUserInfoToForm() {
+                try {
+                    const response = await fetch('/api/kirara/user/info');
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        const data = result.user_data;
+                        
+                        document.getElementById('edit-username').value = data.username || '';
+                        
+                        if (data.birthday && data.birthday.year && data.birthday.month && data.birthday.day) {
+                            document.getElementById('display-birthday').textContent = 
+                                `${data.birthday.year}年${data.birthday.month}月${data.birthday.day}日`;
+                        } else {
+                            document.getElementById('display-birthday').textContent = '未设置';
+                        }
+                        
+                        if (data.contact_info) {
+                            document.getElementById('edit-contact-phone').value = data.contact_info.phone || '';
+                        }
+                        
+                        if (data.emergency_contact) {
+                            document.getElementById('edit-emergency-contact').value = data.emergency_contact.name || '';
+                            document.getElementById('edit-emergency-phone').value = data.emergency_contact.phone || '';
+                        }
+                    }
+                } catch (error) {
+                    console.error('加载用户信息到表单失败:', error);
+                }
+            }
+            
+            const optionsBtn = document.getElementById('optionsBtn');
+            if (optionsBtn) {
+                optionsBtn.addEventListener('click', function() {
+                    setTimeout(initUserProfileEdit, 300);
+                });
+            }
+            
+            
+            
+            // 用户菜单交互
+            const userMenu = document.getElementById('user-menu');
+            const userAvatarBtn = document.getElementById('user-avatar-btn');
+            const userDropdown = document.getElementById('user-dropdown');
+            const logoutBtn = document.getElementById('logout-btn');
+            
+            if (userAvatarBtn) {
+                userAvatarBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    userDropdown.classList.toggle('show');
+                });
+            }
+            
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', function() {
+                    if (confirm('确定要重置用户数据吗？这将清除所有注册信息并重新开始。')) {
+                        fetch('/api/kirara/user/reset', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        }).then(response => response.json()).then(data => {
+                            if (data.success) {
+                                localStorage.removeItem('kirara_registered');
+                                localStorage.removeItem('kirara_user_data');
+                                sessionStorage.removeItem('currentUser');
+                                window.location.reload();
+                            }
+                        }).catch(error => {
+                            console.error('重置用户数据失败:', error);
+                            showToast('重置失败，请重试', 'error');
+                        });
+                    }
+                });
+            }
+            
+            // 点击页面其他地方关闭下拉菜单
+            document.addEventListener('click', function(e) {
+                if (userDropdown && !userMenu.contains(e.target)) {
+                    userDropdown.classList.remove('show');
+                }
+            });
+
+            // 上下文选项卡切换
+            const contextTabs = document.querySelectorAll('.context-tab');
+            contextTabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const tabName = this.dataset.tab;
+                    
+                    // 更新选项卡状态
+                    contextTabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // 显示对应面板
+                    const panels = document.querySelectorAll('.tab-panel');
+                    panels.forEach(p => p.classList.remove('active'));
+                    const targetPanel = document.getElementById(`${tabName}-panel`);
+                    if (targetPanel) {
+                        targetPanel.classList.add('active');
+                        
+                        // 延迟加载内容
+                        if (tabName === 'memories') {
+                            loadMemories();
+                        } else if (tabName === 'system-prompt') {
+                            loadSystemPrompt();
+                        } else if (tabName === 'custom-prompts') {
+                            loadCustomPrompts();
+                        }
+                    }
+                });
+            });
+
+            // 选项面板切换
+            const optionsTabs = document.querySelectorAll('.options-tab');
+            optionsTabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const tabName = this.dataset.optionsTab;
+                    
+                    // 更新选项卡状态
+                    optionsTabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // 显示对应面板
+                    const panels = document.querySelectorAll('.options-panel');
+                    panels.forEach(p => p.classList.remove('active'));
+                    const targetPanel = document.getElementById(`options-${tabName}-panel`);
+                    if (targetPanel) {
+                        targetPanel.classList.add('active');
+                        
+                        // 如果切换到用户信息面板，初始化并加载用户信息
+                        if (tabName === 'user') {
+                            initUserProfileEdit();
+                        }
+                        // PR-2：切换到用量管理面板时加载当前用量与历史统计
+                        if (tabName === 'usage') {
+                            if (typeof loadUsageStats === 'function') loadUsageStats();
+                        }
+                        // 使用时间面板：加载每日使用时长与 token 损耗趋势
+                        if (tabName === 'usage-time') {
+                            if (typeof loadUsageTimeStats === 'function') loadUsageTimeStats();
+                        }
+                        // 切换到通讯接口面板时加载网关与各通道状态
+                        if (tabName === 'comm') {
+                            if (typeof loadCommPanel === 'function') loadCommPanel();
+                        }
+                        // 切换到技能管理面板时渲染技能列表
+                        if (tabName === 'skills') {
+                            if (typeof renderSkillsList === 'function') renderSkillsList();
+                        }
+                    }
+                });
+            });
+
+            // 选项卡条横向滚动：隐藏滚动条后，用“条件式边缘渐隐”提示可滚动方向，
+            // 并把鼠标纵向滚轮转为横向滚动（触屏/触控板原生横滑不受影响）
+            (function initOptionsTabsOverflow() {
+                const bar = document.querySelector('.options-tabs');
+                if (!bar) return;
+
+                function updateFades() {
+                    const canLeft = bar.scrollLeft > 1;
+                    const canRight = bar.scrollLeft + bar.clientWidth < bar.scrollWidth - 1;
+                    bar.classList.toggle('can-scroll-left', canLeft);
+                    bar.classList.toggle('can-scroll-right', canRight);
+                }
+
+                bar.addEventListener('scroll', updateFades, { passive: true });
+                window.addEventListener('resize', updateFades);
+                // 面板打开（display 变化）时尺寸从 0 变为实际值，ResizeObserver 可捕获
+                if (typeof ResizeObserver !== 'undefined') {
+                    new ResizeObserver(updateFades).observe(bar);
+                }
+                updateFades();
+
+                bar.addEventListener('wheel', function (e) {
+                    // 触控板已在横向滑动、或内容不溢出时不接管
+                    if (Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+                    if (bar.scrollWidth <= bar.clientWidth) return;
+                    bar.scrollLeft += e.deltaY;
+                    e.preventDefault();
+                }, { passive: false });
+            })();
+
+            // 绑定记忆库相关按钮事件
+            const addMemoryBtn = document.getElementById('add-memory-btn');
+            const clearMemoriesBtn = document.getElementById('clear-memories-btn');
+            const refreshMemoriesBtn = document.getElementById('refresh-memories');
+
+            if (addMemoryBtn) {
+                addMemoryBtn.addEventListener('click', openAddMemoryModal);
+            }
+            if (clearMemoriesBtn) {
+                clearMemoriesBtn.addEventListener('click', clearMemories);
+            }
+            if (refreshMemoriesBtn) {
+                refreshMemoriesBtn.addEventListener('click', loadMemories);
+            }
+
+            // 绑定系统提示词相关按钮事件
+            const saveSystemPromptBtn = document.getElementById('save-system-prompt-btn');
+            const refreshSystemPromptBtn = document.getElementById('refresh-system-prompt');
+
+            if (saveSystemPromptBtn) {
+                saveSystemPromptBtn.addEventListener('click', saveSystemPrompt);
+            }
+            if (refreshSystemPromptBtn) {
+                refreshSystemPromptBtn.addEventListener('click', loadSystemPrompt);
+            }
+
+            // 绑定自定义提示词相关按钮事件
+            const addCustomPromptBtn = document.getElementById('add-custom-prompt-btn');
+            const refreshCustomPromptsBtn = document.getElementById('refresh-custom-prompts');
+
+            if (addCustomPromptBtn) {
+                addCustomPromptBtn.addEventListener('click', openAddPromptModal);
+            }
+            if (refreshCustomPromptsBtn) {
+                refreshCustomPromptsBtn.addEventListener('click', loadCustomPrompts);
+            }
+
+            // 角色形象cookie存档功能
+            const kiraraImg = document.getElementById('kirara-img');
+            const defaultImage = '/apps/kirara/sprites/characters/kirara/common/kirara-casual1-default.svg';
+            
+            function getCookie(name) {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) return parts.pop().split(';').shift();
+                return null;
+            }
+            
+            function setCookie(name, value, days = 365) {
+                const date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                const expires = `expires=${date.toUTCString()}`;
+                document.cookie = `${name}=${value}; ${expires}; path=/`;
+            }
+            
+            function loadSavedCharacter() {
+                const savedImage = getCookie('kirara_character');
+                if (savedImage && kiraraImg) {
+                    kiraraImg.src = savedImage;
+                }
+            }
+            
+            loadSavedCharacter();
+            
+            document.querySelectorAll('.character-option').forEach(item => {
+                const imageUrl = item.dataset.image;
+                if (imageUrl) {
+                    item.addEventListener('click', () => {
+                        if (document.body.classList.contains('anime-disabled')) return;
+                        if (kiraraImg) {
+                            kiraraImg.src = imageUrl;
+                            setCookie('kirara_character', imageUrl);
+                        }
+                    });
+                }
+            });
+        });
+
+        // 显示消息提示
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast-message');
+            toast.textContent = message;
+            toast.className = `toast-message ${type} show`;
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // 加载记忆库
+        function loadMemories() {
+            fetch('/api/user/memories', {
+                method: 'GET',
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                const memoriesList = document.getElementById('memories-list');
+                if (data.success && data.memories) {
+                    const memories = data.memories;
+                    if (memories.length === 0) {
+                        memoriesList.innerHTML = '<div class="loading-text">暂无记忆</div>';
+                    } else {
+                        const groupedMemories = groupMemoriesByTimestamp(memories);
+                        memoriesList.innerHTML = renderMemoryCards(groupedMemories);
+                    }
+                } else {
+                    memoriesList.innerHTML = '<div class="loading-text">加载失败</div>';
+                }
+            })
+            .catch(error => {
+                console.error('加载记忆库失败:', error);
+                document.getElementById('memories-list').innerHTML = '<div class="loading-text">加载失败</div>';
+            });
+        }
+
+        // 解析记忆内容，提取对话对
+        function parseMemoryContent(content) {
+            const lines = content.split('\n');
+            const dialogPairs = [];
+            let currentPair = { user: '', kirara: '' };
+            let currentSection = null;
+            
+            for (let line of lines) {
+                line = line.trim();
+                if (!line) continue;
+                
+                if (line.startsWith('[User]')) {
+                    if (currentPair.user || currentPair.kirara) {
+                        dialogPairs.push({ ...currentPair });
+                    }
+                    currentPair = { user: line.substring(6), kirara: '' };
+                    currentSection = 'user';
+                } else if (line.startsWith('[Kirara]')) {
+                    currentPair.kirara = line.substring(8);
+                    currentSection = 'kirara';
+                } else if (currentSection === 'kirara') {
+                    currentPair.kirara += '\n' + line;
+                } else if (currentSection === 'user') {
+                    currentPair.user += '\n' + line;
+                }
+            }
+            
+            if (currentPair.user || currentPair.kirara) {
+                dialogPairs.push({ ...currentPair });
+            }
+            
+            return dialogPairs;
+        }
+
+        // 按时间戳分组记忆
+        function groupMemoriesByTimestamp(memories) {
+            const groups = {};
+            
+            memories.forEach((memory, index) => {
+                const content = memory.content || '';
+                const timestampMatch = content.match(/time:(\d{4}\/\d{2}\/\d{2})/m);
+                const timestamp = timestampMatch ? timestampMatch[1] : '未知日期';
+                
+                if (!groups[timestamp]) {
+                    groups[timestamp] = [];
+                }
+                
+                const dialogPairs = parseMemoryContent(content);
+                groups[timestamp].push({ 
+                    ...memory, 
+                    originalIndex: index,
+                    dialogPairs: dialogPairs 
+                });
+            });
+            
+            return Object.keys(groups).sort().reverse().map(date => ({
+                date,
+                memories: groups[date],
+                totalDialogs: groups[date].reduce((sum, m) => sum + m.dialogPairs.length, 0)
+            }));
+        }
+
+        // 渲染记忆卡片
+        function renderMemoryCards(groupedMemories) {
+            return groupedMemories.map(group => {
+                const allDialogs = [];
+                
+                group.memories.forEach(memory => {
+                    memory.dialogPairs.forEach((pair, idx) => {
+                        const userContent = escapeHtml(pair.user).replace(/\n/g, '<br>');
+                        const kiraraContent = escapeHtml(pair.kirara).replace(/\n/g, '<br>');
+                        
+                        allDialogs.push(`
+                            <div class="memory-dialog-pair">
+                                <div class="memory-dialog-user">
+                                    <span class="memory-dialog-label">👤 用户</span>
+                                    <div class="memory-dialog-content">${userContent}</div>
+                                </div>
+                                <div class="memory-dialog-kirara">
+                                    <span class="memory-dialog-label">🤖 Kirara</span>
+                                    <div class="memory-dialog-content">${kiraraContent}</div>
+                                </div>
+                            </div>
+                        `);
+                    });
+                });
+                
+                return `
+                    <div class="memory-card">
+                        <div class="memory-card-header">
+                            <span class="memory-card-date">📅 ${group.date}</span>
+                            <span class="memory-card-count">${group.totalDialogs} 条对话</span>
+                        </div>
+                        <div class="memory-card-body">
+                            ${allDialogs.join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 打开添加记忆模态框
+        function openAddMemoryModal() {
+            document.getElementById('add-memory-modal').classList.add('show');
+            document.getElementById('memory-content').value = '';
+        }
+
+        // 关闭添加记忆模态框
+        function closeAddMemoryModal() {
+            document.getElementById('add-memory-modal').classList.remove('show');
+        }
+
+        // 添加记忆
+        function addMemory() {
+            const content = document.getElementById('memory-content').value.trim();
+            if (!content) {
+                showToast('请输入记忆内容', 'error');
+                return;
+            }
+
+            fetch('/api/user/memories/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ content })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('记忆添加成功');
+                    closeAddMemoryModal();
+                    loadMemories();
+                } else {
+                    showToast(data.message || '添加失败', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('添加记忆失败:', error);
+                showToast('添加失败', 'error');
+            });
+        }
+
+        // 清空记忆库
+        function clearMemories() {
+            if (!confirm('确定要清空所有记忆吗？此操作不可恢复。')) {
+                return;
+            }
+
+            fetch('/api/user/memories/clear', {
+                method: 'POST',
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('记忆库已重置');
+                    loadMemories();
+                } else {
+                    showToast(data.message || '清空失败', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('清空记忆库失败:', error);
+                showToast('清空失败', 'error');
+            });
+        }
+
+        // 加载系统提示词
+        function loadSystemPrompt() {
+            const textarea = document.getElementById('system-prompt-textarea');
+            if (textarea) {
+                textarea.value = '使用默认系统提示';
+                textarea.disabled = true;
+            }
+            console.log('系统提示已移除自定义功能');
+        }
+
+        // 保存系统提示词
+        function saveSystemPrompt() {
+            showToast('系统提示已锁定为默认，无法修改', 'info');
+        }
+
+        // 加载自定义提示词
+        function loadCustomPrompts() {
+            fetch('/api/user/prompts', {
+                method: 'GET',
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                const promptsList = document.getElementById('custom-prompts-list');
+                if (data.success && data.prompts) {
+                    const customPrompts = data.prompts.custom_prompts || [];
+                    if (customPrompts.length === 0) {
+                        promptsList.innerHTML = '<div class="loading-text">暂无自定义提示词</div>';
+                    } else {
+                        promptsList.innerHTML = customPrompts.map((prompt, index) => `
+                            <div class="custom-prompt-item">
+                                <div class="custom-prompt-content">
+                                    <span class="memory-index">${index + 1}</span>
+                                    ${escapeHtml(prompt)}
+                                </div>
+                                <div class="custom-prompt-actions">
+                                    <button class="prompt-action-btn delete" onclick="deleteCustomPrompt(${index})">删除</button>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                } else {
+                    promptsList.innerHTML = '<div class="loading-text">加载失败</div>';
+                }
+            })
+            .catch(error => {
+                console.error('加载自定义提示词失败:', error);
+                document.getElementById('custom-prompts-list').innerHTML = '<div class="loading-text">加载失败</div>';
+            });
+        }
+
+        // 打开添加自定义提示词模态框
+        function openAddPromptModal() {
+            document.getElementById('add-prompt-modal').classList.add('show');
+            document.getElementById('prompt-content').value = '';
+        }
+
+        // 关闭添加自定义提示词模态框
+        function closeAddPromptModal() {
+            document.getElementById('add-prompt-modal').classList.remove('show');
+        }
+
+        // 添加自定义提示词
+        function addCustomPrompt() {
+            const content = document.getElementById('prompt-content').value.trim();
+            if (!content) {
+                showToast('请输入提示词内容', 'error');
+                return;
+            }
+
+            fetch('/api/user/prompts/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ content })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('提示词添加成功');
+                    closeAddPromptModal();
+                    loadCustomPrompts();
+                } else {
+                    showToast(data.message || '添加失败', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('添加提示词失败:', error);
+                showToast('添加失败', 'error');
+            });
+        }
+
+        // 删除自定义提示词
+        function deleteCustomPrompt(index) {
+            if (!confirm('确定要删除这个提示词吗？')) {
+                return;
+            }
+
+            fetch(`/api/user/prompts/delete/${index}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('提示词已删除');
+                    loadCustomPrompts();
+                } else {
+                    showToast(data.message || '删除失败', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('删除提示词失败:', error);
+                showToast('删除失败', 'error');
+            });
+        }
+
+        // HTML转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        // 同步拉取 options 并内联到 window，彻底消除初始化竞态
+        // （同步 XHR 会阻塞页面渲染，但文件很小，实际无感知；换来的是 UI 模式 100% 一致）
+        (function() {
+            try {
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', '/api/kirara/options', false); // false = 同步
+                xhr.send(null);
+                if (xhr.status === 200) {
+                    var data = JSON.parse(xhr.responseText);
+                    if (data && data.success && data.options) {
+                        window.__kirara_preloaded_options = data.options;
+                        try {
+                            if (data.options.ui_mode) {
+                                localStorage.setItem('kirara_ui_mode', data.options.ui_mode);
+                            }
+                        } catch (e) {}
+                    }
+                }
+            } catch (e) { /* 后端没起或其他兜底：交给后续 fetch */ }
+        })();
+    </script>
+    <script src="/apps/kirara/js/kiraraGenCore.js"></script>
+    <script src="/apps/kirara/js/kirara-life-grid.js"></script>
+    <script src="/apps/kirara/js/socket-io.js"></script>
+    <!--script src="/apps/kirara/static/js/goLive.js"></script-->
+    <!--Go Live 已废除；相关前端入口不再启用-->
+</body>
+</html>

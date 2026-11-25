@@ -1,0 +1,15 @@
+{
+    "username": "Barry",
+    "email": "1066344121@qq.com",
+    "birthday": {
+        "year": "2007",
+        "month": "10",
+        "day": "24"
+    },
+    "contact_info": {
+        "email": "1066344121@qq.com"
+    },
+    "emergency_contact": {},
+    "avatar": "/apps/kirara/sprites/logos/kirara-4.png",
+    "registered_at": "2026-07-19 18:56:04"
+}

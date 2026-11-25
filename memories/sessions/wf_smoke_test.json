@@ -1,0 +1,14 @@
+{
+  "conversation_history": [
+    {
+      "role": "user",
+      "content": "hello"
+    },
+    {
+      "role": "assistant",
+      "content": "你好呀！我是绮罗罗~(≧∇≦)ﾉ"
+    }
+  ],
+  "summary": "",
+  "last_updated": 1792374493.0456097
+}

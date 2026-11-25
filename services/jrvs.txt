@@ -1,0 +1,1034 @@
+# jrvs.py
+# Kirara JRVS (Joint Ratiocination Visual System) Core Kernel
+# Author: Barry Molynton(Founder, Chairman and CTO of TeleVideo Inc.)
+# Version: 0.1 Alpha (Project Dartmouth)
+# 导入系统依赖
+import os
+import sys
+import subprocess
+import json
+import re
+import asyncio
+import threading
+import time
+"""
+目前的Kirara完成度 60%
+✅ 不复读了	满分	自我介绍消失了，这是最大的胜利
+✅ 记忆检索	80分	她知道你看到原神会焦虑，知道你在工作
+⚠️ 情绪判断	40分	你明明很高兴（"天气很好！""去野餐！"），她却说"您今天心情有些低落"
+⚠️ 软妹浓度	超标	每句话3-4个颜文字，已经不是软妹了，是颜文字炸弹
+❌ 技术人格	0分	   尚未加入”我的设定集内容，以及我正在操作的资产文件概述“
+"""
+# 安全导入 chromadb
+CHROMADB_AVAILABLE = False
+try:
+    import chromadb
+    CHROMADB_AVAILABLE = True
+    print("[System] chromadb 导入成功")
+except ImportError:
+    CHROMADB_AVAILABLE = False
+    print("[警告] chromadb 未安装，将使用简化版记忆系统")
+
+# 安全导入 websockets
+WEBSOCKETS_AVAILABLE = False
+try:
+    import websockets
+    WEBSOCKETS_AVAILABLE = True
+    print("[System] websockets 导入成功")
+except ImportError:
+    WEBSOCKETS_AVAILABLE = False
+    print("[警告] websockets 未安装，WebSocket服务将不可用")
+
+# 安全导入 anime_style_converter (暂时注释掉)
+ANIME_CONVERTER_AVAILABLE = False
+try:
+    # from anime_style_converter import anime_converter, AnimePersonality
+    # ANIME_CONVERTER_AVAILABLE = True
+    # print("[System] anime_style_converter 导入成功")
+    raise ImportError("暂时禁用")
+except ImportError:
+    ANIME_CONVERTER_AVAILABLE = False
+    AnimePersonality = None
+    print("[警告] anime_style_converter 未安装，将使用默认回复风格")
+
+# 初始化 sentence_transformers 相关变量
+# 暂时禁用 sentence_transformers 以避免阻塞启动
+SENTENCE_TRANSFORMERS_AVAILABLE = False
+SentenceTransformer = None
+print("[警告] sentence_transformers 已暂时禁用，将使用简化版记忆检索")
+
+# 尝试使用 ollama 替代 llama-cli.exe
+OLLAMA_AVAILABLE = False
+try:
+    import ollama
+    from ollama import Client
+    OLLAMA_AVAILABLE = True
+    print("[System] ollama 导入成功，可以使用 CUDA 推理")
+except ImportError:
+    OLLAMA_AVAILABLE = False
+    print("[警告] ollama 未安装，将尝试使用 llama-cli.exe")
+
+# 使用 llama-cli.exe 作为备选
+LLAMA_CLI_PATH = r"E:\virtuaos\apps\kirara\llama.cpp\build\bin\Release\llama-cli.exe"
+LLAMA_AVAILABLE = os.path.exists(LLAMA_CLI_PATH)
+if not LLAMA_AVAILABLE and not OLLAMA_AVAILABLE:
+    print(f"[警告] llama-cli.exe 不存在于路径: {LLAMA_CLI_PATH}")
+    print("[警告] 无法使用 LLM 功能，将启用模拟模式")
+def check_environ():
+    # 检查 ollama 服务是否运行
+    try:
+        # 尝试执行一个简单的 ollama 命令来检查服务状态
+        result = subprocess.run("ollama list", shell=True, capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            print("[System] ollama 服务已运行")
+        else:
+            print("[警告] ollama 服务未运行")
+    except Exception as e:
+        print(f"[警告] 检查 ollama 服务时出错: {e}")
+# ==========================================
+# 1. 配置区 (Config)
+# ==========================================
+# 使用绝对路径，基于当前文件位置
+SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
+APP_DIR = os.path.dirname(SERVICE_DIR)
+
+# 模型配置
+MODELS = {
+    "kiraraModelC": {
+        "name": "Kirara Router",
+        "path": os.path.join(APP_DIR, "models", "llama-3.1-8b-instruct-reasoner-1o1_v0.3-q4_k_m.gguf"),
+        "ollama_model": "kirara-router"
+    },
+    "kiraraModelO": {
+        "name": "Kirara Reasoning",
+        "path": os.path.join(APP_DIR, "models", "gpt-oss-20b-mxfp4.gguf"),
+        "ollama_model": "kirara-reasoning"
+    }
+}
+
+# 永久记忆（硬编码的核心设定）
+PERMANENT_MEMORIES = [
+    "巴里大人是TeleVideo Inc.的CEO，正在做《特战精英》游戏和Kirara AI",
+    "巴里讨厌原神和B站，看到会焦虑，需要去写代码来缓解",
+    "Kirara是巴里的专属AI女仆，性格软妹，崇拜巴里",
+    "巴里的终极目标：让二次元回归纯粹，而不是唯利是图",
+    "Kirara非常关心巴里大人的情绪和状态",
+    "巴里喜欢写代码，Kirara最喜欢看巴里大人写代码的样子",
+    "Kirara会用可爱的语气和表情符号来表达自己"
+]
+
+# 默认模型
+DEFAULT_MODEL = "kiraraModelC"
+MODEL_PATH = MODELS[DEFAULT_MODEL]["path"]
+
+CHROMA_PATH = os.path.join(APP_DIR, "memories", "kirara_memory")
+EMBED_MODEL = 'all-MiniLM-L6-v2'
+
+# 性格系统提示词 (The Soul)
+SYS_PROMPT_PATH = os.path.join(APP_DIR, "memories", "sysPrompt.txt")
+try:
+    SYSTEM_PROMPT = open(SYS_PROMPT_PATH, "r", encoding="utf-8").read()
+    print(f"[System] 系统提示词加载成功，长度: {len(SYSTEM_PROMPT)}")
+except FileNotFoundError:
+    print(f"[警告] 系统提示词文件不存在: {SYS_PROMPT_PATH}")
+    SYSTEM_PROMPT = "你是 Kirara，一个可爱的AI助手。请用友好、活泼的语气回答用户的问题。"
+
+# ==========================================
+# 2. 认知层 (RAG & Memory)
+# ==========================================
+class CognitiveCore:
+    def __init__(self, db_path):
+        global SENTENCE_TRANSFORMERS_AVAILABLE, SentenceTransformer
+        
+        print("[调试] 开始初始化 CognitiveCore")
+        
+        # 初始化 chromadb（带回退机制）
+        self.use_chromadb = CHROMADB_AVAILABLE
+        if self.use_chromadb:
+            try:
+                print("[调试] 初始化 chromadb")
+                self.client = chromadb.PersistentClient(path=db_path)
+                self.collection = self.client.get_or_create_collection(name="barry_philosophy")
+                print("[调试] chromadb 初始化成功")
+            except Exception as e:
+                print(f"[警告] chromadb 初始化失败: {e}")
+                self.use_chromadb = False
+                self.memory_store = []
+        
+        # 使用简单内存存储作为回退
+        if not self.use_chromadb:
+            self.memory_store = []
+            print("[调试] 使用简化版内存存储")
+        
+        # sentence_transformers 已暂时禁用
+        self.embedder = None
+        
+        self.loaded = False
+        print("[调试] CognitiveCore 初始化完成")
+        
+    def cognitionFeedback(self, text_chunks):
+        """
+        喂给Kirara之前的记忆（Tokenized）
+        """
+        if not self.use_chromadb:
+            self.memory_store.extend(text_chunks)
+            self.loaded = True
+            print(f"[Kirara] Memory loaded to simple store! Count: {len(self.memory_store)}")
+        elif self.use_chromadb and not SENTENCE_TRANSFORMERS_AVAILABLE:
+            # 如果是向量数据库模式但 sentence_transformers 未启用，回退到内存存储
+            self.use_chromadb = False
+            self.memory_store = []
+            self.memory_store.extend(text_chunks)
+            self.loaded = True
+            print(f"[Kirara] 暂时使用内存存储！Count: {len(self.memory_store)}")
+    
+    def add_memory(self, user_input, assistant_reply, emotion="neutral"):
+        """添加新的对话记忆"""
+        import time
+        memory_text = f"{user_input} | {assistant_reply} | 情绪:{emotion}"
+        
+        if self.use_chromadb and SENTENCE_TRANSFORMERS_AVAILABLE:
+            try:
+                self.collection.add(
+                    documents=[memory_text],
+                    metadatas=[{"source": "dialogue", "emotion": emotion, "date": time.time()}],
+                    ids=[f"mem_{int(time.time())}"]
+                )
+                print(f"[Kirara] 记忆已添加到 ChromaDB")
+            except Exception as e:
+                print(f"[警告] 添加记忆到 ChromaDB 失败: {e}")
+                self.memory_store.append(memory_text)
+        else:
+            self.memory_store.append(memory_text)
+            print(f"[Kirara] 记忆已添加到内存存储")
+    
+    def retrieve_context(self, query, n_results=2):
+        """检索相关记忆"""
+        # 先获取永久记忆
+        context = "\n".join(PERMANENT_MEMORIES) + "\n\n"
+        
+        if not self.use_chromadb and self.loaded:
+            # 使用简单内存存储
+            if self.memory_store:
+                # 取最近的n_results条对话记忆
+                recent_memories = self.memory_store[-n_results:]
+                context += "[对话记忆]\n" + "\n".join(recent_memories)
+            return context
+        
+        # ChromaDB模式（如果可用）
+        if self.use_chromadb and SENTENCE_TRANSFORMERS_AVAILABLE:
+            try:
+                results = self.collection.query(
+                    query_texts=[query],
+                    n_results=n_results,
+                    where={"source": "dialogue"}
+                )
+                if results['documents'][0]:
+                    context += "[对话记忆]\n" + "\n".join(results['documents'][0])
+                return context
+            except Exception as e:
+                print(f"[警告] ChromaDB 检索失败: {e}")
+                if self.memory_store:
+                    recent_memories = self.memory_store[-n_results:]
+                    context += "[对话记忆]\n" + "\n".join(recent_memories)
+                return context
+        
+        return context
+
+# ==========================================
+# 3. 推理层 (LLM Inference)
+# ==========================================
+class InferenceEngine:
+    def __init__(self, model_path, model_name="kiraraModelC", ollama_model="kirara-router"):
+        self.model_path = model_path
+        self.model_name = model_name
+        self.ollama_model = ollama_model
+        if OLLAMA_AVAILABLE:
+            print("[System] 正在初始化JRVS推理引擎...")
+            print("[System] 使用 ollama 作为推理后端，可以使用 CUDA 推理")
+            print(f"[System] 模型: {ollama_model}")
+        elif LLAMA_AVAILABLE:
+            print("[System] 正在初始化JRVS推理引擎...")
+            print("[System] 使用 llama-cli.exe 作为推理后端。")
+            print(f"[System] 模型路径: {model_path}")
+        else:
+            print("[System] 无法找到可用的 LLM 后端，推理引擎将使用模拟模式。")
+
+    def switch_model(self, model_key):
+        if model_key not in MODELS:
+            return False, "未知的模型"
+        model_config = MODELS[model_key]
+        self.model_path = model_config["path"]
+        self.model_name = model_key
+        self.ollama_model = model_config["ollama_model"]
+        print(f"[System] 已切换到模型: {model_config['name']}")
+        return True, model_config['name']
+
+    def generate(self, prompt, system_msg):
+        if OLLAMA_AVAILABLE:
+            try:
+                print("[调试] 使用 ollama 生成文本")
+                full_prompt = f"{system_msg}\n\nUser: {prompt}\nKirara:"
+                print(f"[调试] 生成完整提示词，长度: {len(full_prompt)}")
+
+                response = ollama.generate(
+                    model=self.ollama_model,
+                    prompt=full_prompt,
+                    options={
+                        "temperature": 0.85,      # 调高温度，增加随机性
+                        "top_p": 0.9,            # nucleus sampling
+                        "repetition_penalty": 1.3,  # 惩罚重复token，防止复读
+                        "num_ctx": 8192,
+                        "num_predict": 512       # 限制输出长度，避免8B模型崩溃
+                    }
+                )
+                print("[调试] ollama 生成完成")
+                return response["response"]
+            except Exception as e:
+                print(f"[错误] 使用 ollama 生成文本时出错: {e}")
+                print("[System] Ollama服务不可用，切换到模拟模式")
+                return self._generate_simulation_response(prompt)
+        elif LLAMA_AVAILABLE:
+            full_prompt = f"{system_msg}\n\nUser: {prompt}\nKirara:"
+            print(f"[调试] 生成完整提示词，长度: {len(full_prompt)}")
+
+            cmd = [
+                LLAMA_CLI_PATH,
+                "-m", self.model_path,
+                "-p", full_prompt,
+                "-c", "8192",
+                "-n", "512",                 # 限制输出长度
+                "--temp", "0.85",            # 调高温度
+                "--top-p", "0.9",
+                "--repeat-penalty", "1.3",   # 惩罚重复
+                "--simple-io"
+            ]
+            print(f"[调试] 执行命令: {cmd[0]} {cmd[1]} {cmd[2]} {cmd[3]} ...")
+
+            try:
+                print("[调试] 开始执行 llama-cli.exe")
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                print(f"[调试] llama-cli.exe 执行完成，返回码: {result.returncode}")
+                
+                if result.returncode == 0:
+                    # 提取生成的文本
+                    output = result.stdout.strip()
+                    print(f"[调试] 生成的输出长度: {len(output)}")
+                    # 移除提示词部分，只保留生成的响应
+                    if "Kirara:" in output:
+                        response = output.split("Kirara:")[-1].strip()
+                    else:
+                        response = output
+                    print(f"[调试] 提取的响应: {response}")
+                    return response
+                else:
+                    print(f"[错误] llama-cli.exe 执行失败: {result.stderr}")
+                    return "抱歉，生成响应时出现错误。"
+            except Exception as e:
+                print(f"[错误] 执行 llama-cli.exe 时出错: {e}")
+                import traceback
+                traceback.print_exc()
+                return "抱歉，生成响应时出现错误。"
+        else:
+            # 模拟生成响应（模拟模式）
+            return self._generate_simulation_response(prompt)
+    
+    def _generate_simulation_response(self, prompt):
+        """模拟LLM响应生成，用于测试和演示"""
+        import random
+        
+        greetings = [
+            "你好呀！我是 Kirara Model-C IoT，很高兴为您服务！(≧∇≦)ﾉ",
+            "嗨~ 有什么可以帮助您的吗？(｡･ω･｡)ﾉ",
+            "您好！欢迎使用 Kirara AI！(≧∀≦)ゞ",
+        ]
+        
+        questions = [
+            "这个问题很有趣呢！让我想想... (°ー°〃)",
+            "嗯，我来分析一下这个问题... ( ´･ᴗ･` )",
+            "好的，我来帮您解答！(≧▽≦)",
+        ]
+        
+        thanks = [
+            "不客气啦！能帮到您真好~ (≧∇≦)ﾉ",
+            "不用谢不用谢！(｡･ω･｡)ﾉ",
+            "嘻嘻，这是我应该做的！(≧∀≦)ゞ",
+        ]
+        
+        default_responses = [
+            "我明白了！关于这个问题，我认为... (认真思考中)",
+            "让我整理一下思路... (°ー°〃)",
+            "这个话题很有意思呢！我来分享一下我的看法~",
+            "根据我的分析，您的问题涉及到...",
+            "好的，我来详细解释一下...",
+        ]
+        
+        # 根据输入内容选择响应
+        prompt_lower = prompt.lower()
+        
+        if any(greet in prompt_lower for greet in ["你好", "您好", "hi", "hello", "嗨"]):
+            return random.choice(greetings)
+        elif any(q in prompt_lower for q in ["谢谢", "感谢", "thank"]):
+            return random.choice(thanks)
+        elif any(q in prompt_lower for q in ["？", "?", "什么", "怎么", "为什么", "如何"]):
+            return random.choice(questions) + "\n\n由于当前运行在模拟模式下，完整的AI响应功能需要配置Ollama或llama-cli后端才能使用。"
+        else:
+            return random.choice(default_responses) + "\n\n(提示：当前运行在模拟模式，完整功能需要配置本地LLM模型。)"
+
+
+# ==========================================
+# 3.5 OtherAI
+# ==========================================
+import re
+import ast
+import subprocess
+import requests
+
+class otherAI:
+    def __init__(self, api_client=None):
+        self.api_client = api_client
+        self.skill_registry = {}
+        self.local_models = {
+            "kirara-router": "llama-3.1-8b-instruct-reasoner-1o1_v0.3",
+            "kirara-reasoning": "llama-3.1-8b-instruct-reasoner-1o1",
+            "kiraraModelC": "llama-3.1-8b-instruct-reasoner",
+            "kiraraModelO": "gpt-oss-20b-mxfp4",
+        }
+        self.cloud_models = {
+            "qwen3-max": {"api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1", "api_type": "dashscope"},
+            "glm-4": {"api_base": "https://open.bigmodel.cn/api/paas/v4", "api_type": "zhipu"},
+            "claude-sonnet": {"api_base": "anthropic", "api_type": "anthropic"},
+            "gpt-4": {"api_base": "openai", "api_type": "openai"},
+            "minimax": {"api_base": "minimax", "api_type": "minimax"},
+        }
+        print("[OtherAI] 路由编排器初始化完成")
+
+    def register_skill(self, skill_name, handler_func):
+        self.skill_registry[skill_name] = handler_func
+        print(f"[OtherAI] 注册技能: {skill_name}")
+
+    def is_local_model(self, model_name):
+        return model_name.lower() in [k.lower() for k in self.local_models.keys()]
+
+    def is_cloud_model(self, model_name):
+        return model_name.lower() in [k.lower() for k in self.cloud_models.keys()]
+
+    def parse_router_output(self, output):
+        if not output or not isinstance(output, str):
+            return {"type": "direct", "content": output}
+
+        output = output.strip()
+
+        skill_match = re.match(r'^/\$\s*SKILL:(\w+)\s*PARAMS:(.+)$', output)
+        if skill_match:
+            skill_name = skill_match.group(1)
+            params_str = skill_match.group(2).strip()
+            try:
+                params = json.loads(params_str) if params_str else {}
+            except json.JSONDecodeError:
+                params = {"raw": params_str}
+            return {"type": "skill", "skill": skill_name, "params": params}
+
+        model_match = re.match(r'^/@\s*MODEL:(\w+)\s*PROMPT:(.+)$', output, re.DOTALL)
+        if model_match:
+            model_name = model_match.group(1)
+            prompt = model_match.group(2).strip()
+            return {"type": "model", "model": model_name, "prompt": prompt}
+
+        return {"type": "direct", "content": output}
+
+    def execute_skill(self, skill_name, params):
+        if skill_name in self.skill_registry:
+            try:
+                handler = self.skill_registry[skill_name]
+                result = handler(skill_name, params)
+                return result
+            except Exception as e:
+                print(f"[OtherAI] 执行技能 {skill_name} 时出错: {e}")
+                return f"技能执行失败: {str(e)}"
+        else:
+            return self._default_skill_handler(skill_name, params)
+
+    def _default_skill_handler(self, skill_name, params):
+        system_prompt = "你是一个技能执行器。请根据输入的参数执行以下技能并返回结果。"
+        full_prompt = f"技能名称: {skill_name}\n参数: {json.dumps(params, ensure_ascii=False)}\n\n请执行这个技能并返回结果。"
+
+        if self.api_client:
+            response = self.api_client.generate_response(full_prompt)
+            if response.get('success'):
+                return response.get('response', '')
+            else:
+                return f"技能执行失败: {response.get('error', '未知错误')}"
+
+        return f"[模拟模式] 技能 {skill_name} 执行完成，参数: {params}"
+
+    def route_to_model(self, model_name, prompt):
+        model_name_lower = model_name.lower()
+
+        if self.is_local_model(model_name):
+            print(f"[OtherAI] 使用本地模型: {model_name}")
+            if self.api_client:
+                self.api_client.set_current_model(model_name)
+                response = self.api_client.generate_response(prompt)
+                if response.get('success'):
+                    return response.get('response', '')
+                else:
+                    return f"本地模型调用失败: {response.get('error', '未知错误')}"
+            return f"[模拟模式] 使用本地模型 {model_name}，提示词: {prompt[:50]}..."
+
+        elif self.is_cloud_model(model_name):
+            print(f"[OtherAI] 使用云端模型: {model_name}")
+            if self.api_client:
+                self.api_client.set_current_model(model_name)
+                response = self.api_client.generate_response(prompt)
+                if response.get('success'):
+                    return response.get('response', '')
+                else:
+                    return f"云端API调用失败: {response.get('error', '未知错误')}"
+            return f"[模拟模式] 使用云端模型 {model_name}，提示词: {prompt[:50]}..."
+
+        else:
+            print(f"[OtherAI] 模型 {model_name} 未找到，默认使用云端API")
+            if self.api_client:
+                response = self.api_client.generate_response(prompt)
+                if response.get('success'):
+                    return response.get('response', '')
+                else:
+                    return f"云端API调用失败: {response.get('error', '未知错误')}"
+            return f"[模拟模式] 未知模型 {model_name}，使用默认云端API，提示词: {prompt[:50]}..."
+
+    def orchestrate(self, router_output, original_user_input=""):
+        parsed = self.parse_router_output(router_output)
+
+        if parsed["type"] == "direct":
+            return {
+                "action": "direct",
+                "response": parsed["content"],
+                "should_save": True
+            }
+
+        elif parsed["type"] == "skill":
+            skill_result = self.execute_skill(parsed["skill"], parsed["params"])
+            return {
+                "action": "skill",
+                "skill": parsed["skill"],
+                "result": skill_result,
+                "response": f"[技能执行完成] {skill_result}",
+                "should_save": True
+            }
+
+        elif parsed["type"] == "model":
+            model_name = parsed["model"]
+            prompt = parsed["prompt"]
+
+            if self.is_local_model(model_name):
+                route_result = self.route_to_model(model_name, prompt)
+                return {
+                    "action": "model",
+                    "model": model_name,
+                    "model_type": "local",
+                    "result": route_result,
+                    "response": f"[来自本地模型 {model_name}]:\n{route_result}",
+                    "should_save": True
+                }
+            else:
+                route_result = self.route_to_model(model_name, prompt)
+                return {
+                    "action": "model",
+                    "model": model_name,
+                    "model_type": "cloud",
+                    "result": route_result,
+                    "response": f"[来自云端模型 {model_name}]:\n{route_result}",
+                    "should_save": True
+                }
+
+        return {
+            "action": "unknown",
+            "response": router_output,
+            "should_save": True
+        }
+
+
+# ==========================================
+# 4. 主控类 (JRVS Kernel)
+# ==========================================
+class JRVS_Kernel:
+    def __init__(self, api_client=None):
+        print("[System] 初始化 JRVS_Kernel...")
+        self.cognitive = CognitiveCore(CHROMA_PATH)
+        self.current_model = DEFAULT_MODEL
+        model_config = MODELS[DEFAULT_MODEL]
+        self.inference = InferenceEngine(
+            model_config["path"],
+            DEFAULT_MODEL,
+            model_config["ollama_model"]
+        )
+        self.orchestrator = otherAI(api_client)
+        self.claw = None
+        self.is_running = True
+        self.simulation_mode = not (OLLAMA_AVAILABLE or LLAMA_AVAILABLE)
+        self.router_mode = False
+        
+        # 对话历史管理 - 只保留最近3轮
+        self.chat_history = []
+        self.max_history_rounds = 3  # 最多保留3轮对话
+        
+        if self.simulation_mode:
+            print("[System] JRVS 运行在模拟模式下")
+        self._load_initial_memory()
+        print("[System] JRVS_Kernel 初始化完成")
+
+    def switch_model(self, model_key):
+        success, message = self.inference.switch_model(model_key)
+        if success:
+            self.current_model = model_key
+        return success, message
+
+    def get_available_models(self):
+        models_list = []
+        for key, config in MODELS.items():
+            models_list.append({
+                "key": key,
+                "name": config["name"]
+            })
+        return models_list
+
+    def get_current_model(self):
+        return {
+            "key": self.current_model,
+            "name": MODELS[self.current_model]["name"]
+        }
+
+    def enable_router_mode(self):
+        self.router_mode = True
+        print("[Router] 路由模式已启用")
+
+    def disable_router_mode(self):
+        self.router_mode = False
+        print("[Router] 路由模式已禁用")
+
+    def enable_simulation_mode(self):
+        """启用模拟模式，禁用所有AI功能"""
+        self.simulation_mode = True
+        print("[System] 已切换到模拟模式，所有AI功能已禁用")
+
+    def disable_simulation_mode(self):
+        """禁用模拟模式，恢复AI功能"""
+        if OLLAMA_AVAILABLE or LLAMA_AVAILABLE:
+            self.simulation_mode = False
+            print("[System] 已切换到正常模式，AI功能已恢复")
+            return True
+        else:
+            print("[警告] 没有可用的LLM后端，无法退出模拟模式")
+            return False
+
+    def register_skill(self, skill_name, handler_func):
+        self.orchestrator.register_skill(skill_name, handler_func)
+
+    def register_ai_summon_handler(self, handler_func):
+        self.orchestrator.register_ai_summon_handler(handler_func)
+
+    def _load_initial_memory(self):
+        memories_dir = os.path.join(APP_DIR, "memories")
+        memory_text = []
+        self.memory_files = []
+
+        if os.path.exists(memories_dir):
+            for file in os.listdir(memories_dir):
+                if file.endswith(".txt"):
+                    file_path = os.path.join(memories_dir, file)
+                    self.memory_files.append(file_path)
+                    try:
+                        with open(file_path, "r", encoding="utf-8") as f:
+                            lines = f.readlines()
+                        for line in lines:
+                            stripped = line.strip()
+                            if not stripped:
+                                continue
+                            if stripped.startswith("time:"):
+                                memory_text.append(stripped)
+                            elif stripped == "//":
+                                memory_text.append(stripped)
+                            elif stripped.startswith("[User]") or stripped.startswith("[Kirara]"):
+                                memory_text.append(stripped)
+                        print(f"[Kirara] 加载记忆文件: {file}")
+                    except Exception as e:
+                        print(f"[Kirara] 加载记忆文件失败 {file}: {e}")
+
+        if memory_text:
+            self.cognitive.cognitionFeedback(memory_text)
+            print(f"[Kirara] 共加载 {len(memory_text)} 条记忆！")
+            self.memory_string = "\n".join(memory_text)
+            print(f"[Kirara] 记忆字符串长度: {len(self.memory_string)}")
+        else:
+            print("[Kirara] 没有找到记忆文件，记忆库为空。")
+            self.memory_string = ""
+
+    def append_memory(self, user_input, kirara_response):
+        """追加对话到mem.txt"""
+        import datetime
+        mem_path = os.path.join(APP_DIR, "memories", "mem.txt")
+
+        date_marker = f"time:{datetime.datetime.now().strftime('%Y/%m/%d')}"
+        user_line = f"[User]{user_input}"
+        kirara_line = f"[Kirara]{kirara_response}"
+
+        try:
+            with open(mem_path, "a", encoding="utf-8") as f:
+                f.write(f"\n{date_marker}\n")
+                f.write(f"{user_line}\n")
+                f.write(f"{kirara_line}\n")
+
+            new_entries = [date_marker, user_line, kirara_line]
+            self.memory_string += "\n" + "\n".join(new_entries)
+            self.cognitive.cognitionFeedback(new_entries)
+            print(f"[Kirara] 对话已保存到记忆库")
+        except Exception as e:
+            print(f"[Kirara] 保存记忆失败: {e}")
+    
+    def get_memory_string(self):
+        """获取记忆字符串"""
+        return getattr(self, "memory_string", "")
+
+    def get_raw_memory(self):
+        """获取mem.txt的原始内容，用于前端展示"""
+        mem_path = os.path.join(APP_DIR, "memories", "mem.txt")
+        try:
+            if os.path.exists(mem_path):
+                with open(mem_path, "r", encoding="utf-8") as f:
+                    return f.read()
+            return ""
+        except Exception as e:
+            print(f"[Kirara] 读取记忆文件失败: {e}")
+            return ""
+
+    def get_memory_for_display(self):
+        """获取格式化的记忆内容，用于前端展示"""
+        raw = self.get_raw_memory()
+        if not raw:
+            return ""
+
+        lines = raw.strip().split("\n")
+        formatted = []
+
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("time:"):
+                formatted.append(f'<div class="memory-date">{stripped}</div>')
+            elif stripped == "//":
+                formatted.append('<div class="memory-separator">//</div>')
+            elif stripped.startswith("[User]"):
+                content = stripped[6:]
+                formatted.append(f'<div class="memory-user">{content}</div>')
+            elif stripped.startswith("[Kirara]"):
+                content = stripped[8:]
+                formatted.append(f'<div class="memory-kirara">{content}</div>')
+
+        return "\n".join(formatted)
+
+    def chat(self, user_input, save_memory=True, history=None, system_prompt=None):
+        # 获取记忆上下文（包含永久记忆和对话记忆）
+        memory_context = self.cognitive.retrieve_context(user_input)
+        
+        # 使用传入的history或使用内部对话历史
+        if history and isinstance(history, list):
+            recent_history = history[-2 * self.max_history_rounds:]
+        else:
+            recent_history = self.chat_history[-2 * self.max_history_rounds:]  # 3轮 = 3个user + 3个assistant
+        
+        # 格式化最近对话
+        formatted_history = ""
+        for item in recent_history:
+            if item["role"] == "user":
+                formatted_history += f"[User]{item['content']}\n"
+            else:
+                formatted_history += f"[Kirara]{item['content']}\n"
+        
+        # 构建增强prompt
+        augmented_prompt = f"""[记忆检索结果]
+{memory_context}
+
+[最近对话]
+{formatted_history}
+
+[当前输入]
+{user_input}
+
+[Kirara的回复]
+"""
+        # 使用传入的system_prompt或默认SYSTEM_PROMPT
+        final_system_prompt = system_prompt if system_prompt else SYSTEM_PROMPT
+        if "bilibili" in user_input.lower() or "genshin" in user_input.lower():
+            final_system_prompt += "\n[情绪指令]: 极度厌恶，毒舌，不屑。"
+
+        response = self.inference.generate(augmented_prompt, final_system_prompt)
+        routing_info = None
+
+        if self.router_mode:
+            orch_result = self.orchestrator.orchestrate(response, user_input)
+            response = orch_result["response"]
+            save_memory = orch_result.get("should_save", save_memory)
+            if orch_result["action"] != "direct":
+                routing_info = {
+                    "action": orch_result["action"],
+                    "response": response,
+                    "model": orch_result.get("model"),
+                    "model_type": orch_result.get("model_type"),
+                    "skill": orch_result.get("skill"),
+                    "result": orch_result.get("result"),
+                }
+                print(f"[Router] 执行动作: {orch_result['action']}")
+                if "model" in orch_result:
+                    model_type = orch_result.get("model_type", "unknown")
+                    print(f"[Router] 目标模型: {orch_result['model']} (类型: {model_type})")
+                if "skill" in orch_result:
+                    print(f"[Router] 调用技能: {orch_result['skill']}")
+
+        # 暂时注释掉 Anime-style-converter
+        # if ANIME_CONVERTER_AVAILABLE:
+        #     try:
+        #         personality = AnimePersonality.CUTE
+        #         anime_response = anime_converter.convert_to_anime_style(response, personality)
+        #         response = anime_response
+        #     except Exception as e:
+        #         print(f"[警告] 二次元化失败: {e}")
+
+        if save_memory:
+            self.append_memory(user_input, response)
+            # 添加到对话历史
+            self.chat_history.append({"role": "user", "content": user_input})
+            self.chat_history.append({"role": "assistant", "content": response})
+            # 限制对话历史长度
+            self.chat_history = self.chat_history[-2 * self.max_history_rounds:]
+
+        return {
+            "response": response,
+            "routing_info": routing_info
+        }
+
+    def chat_with_router_details(self, user_input, save_memory=True):
+        # 获取记忆上下文（包含永久记忆和对话记忆）
+        memory_context = self.cognitive.retrieve_context(user_input)
+        
+        # 构建最近对话历史（只保留最近3轮）
+        recent_history = self.chat_history[-2 * self.max_history_rounds:]  # 3轮 = 3个user + 3个assistant
+        
+        # 格式化最近对话
+        formatted_history = ""
+        for item in recent_history:
+            if item["role"] == "user":
+                formatted_history += f"[User]{item['content']}\n"
+            else:
+                formatted_history += f"[Kirara]{item['content']}\n"
+        
+        # 构建增强prompt
+        augmented_prompt = f"""[记忆检索结果]
+{memory_context}
+
+[最近对话]
+{formatted_history}
+
+[当前输入]
+{user_input}
+
+[Kirara的回复]
+"""
+
+        final_system_prompt = SYSTEM_PROMPT
+        if "bilibili" in user_input.lower() or "genshin" in user_input.lower():
+            final_system_prompt += "\n[情绪指令]: 极度厌恶，毒舌，不屑。"
+
+        raw_response = self.inference.generate(augmented_prompt, final_system_prompt)
+
+        # 暂时注释掉 Anime-style-converter
+        # if ANIME_CONVERTER_AVAILABLE:
+        #     try:
+        #         personality = AnimePersonality.CUTE
+        #         raw_response = anime_converter.convert_to_anime_style(raw_response, personality)
+        #     except Exception as e:
+        #         print(f"[警告] 二次元化失败: {e}")
+
+        if save_memory:
+            self.append_memory(user_input, raw_response)
+            # 添加到对话历史
+            self.chat_history.append({"role": "user", "content": user_input})
+            self.chat_history.append({"role": "assistant", "content": raw_response})
+            # 限制对话历史长度
+            self.chat_history = self.chat_history[-2 * self.max_history_rounds:]
+
+        return {
+            "response": raw_response,
+            "routing_info": None
+        }
+
+    def run_im_bridge(self):
+        """
+        这是一个示例桥接函数。
+        实际使用时，你需要在这里接入 Discord.py, QQ Bot API, 或者简单的 Socket Server。
+        """
+        print("[Kirara] IM Bridge 启动... 等待连接...")
+        # 伪代码：
+        # while self.is_running:
+        #     msg = im_client.receive()
+        #     if msg:
+        #         reply = self.chat(msg.content)
+        #         im_client.send(reply)
+        pass
+# ==========================================
+# 5. 封装成服务
+# ==========================================
+class Kirara_Service:
+    def __init__(self, kernel):
+        self.host = "0.0.0.0"
+        self.port = 4989
+        self.server = None
+        self.loop = None
+        self.clients = []
+        self.running = False
+        self.kernel = kernel
+        self.commandList = [
+            "/help",
+            "/list",
+            "/bye",
+            "/show <info>",
+        ]
+        print("[System] Kirara_Service 初始化完成（使用HTTP API模式）")
+    
+    async def handle_client(self, websocket, path):
+        # 处理客户端连接
+        print(f"新客户端连接: {websocket.remote_address}")
+        self.clients.append(websocket)
+        
+        try:
+            async for message in websocket:
+                print(f"收到消息: {message}")
+                try:
+                    data = json.loads(message)
+                    if data.get("type") == "chat":
+                        user_input = data.get("message", "")
+                        response = self.kernel.chat(user_input)
+                        # 发送响应
+                        await websocket.send(json.dumps({
+                            "type": "chat",
+                            "response": response
+                        }))
+                    elif data.get("type") == "command":
+                        command = data.get("command", "")
+                        if command == "/help":
+                            response = "可用命令: " + ", ".join(self.commandList)
+                        elif command == "/list":
+                            response = f"当前连接数: {len(self.clients)}"
+                        elif command == "/bye":
+                            response = "再见！"
+                        else:
+                            response = f"未知命令: {command}"
+                        await websocket.send(json.dumps({
+                            "type": "command",
+                            "response": response
+                        }))
+                    else:
+                        await websocket.send(json.dumps({
+                            "type": "error",
+                            "message": "未知消息类型"
+                        }))
+                except json.JSONDecodeError:
+                    await websocket.send(json.dumps({
+                        "type": "error",
+                        "message": "无效的JSON格式"
+                    }))
+                except Exception as e:
+                    print(f"处理消息时出错: {e}")
+                    await websocket.send(json.dumps({
+                        "type": "error",
+                        "message": f"处理消息时出错: {str(e)}"
+                    }))
+        except websockets.exceptions.ConnectionClosed:
+            print(f"客户端断开连接: {websocket.remote_address}")
+        finally:
+            if websocket in self.clients:
+                self.clients.remove(websocket)
+    
+    async def start_server(self):
+        # 启动WebSocket服务器
+        self.server = await websockets.serve(
+            self.handle_client,
+            self.host,
+            self.port
+        )
+        self.running = True
+        print(f"[服务] Kirara WebSocket服务已启动，监听地址: {self.host}:{self.port}")
+        await self.server.wait_closed()
+    
+    def run(self):
+        # 使用 HTTP API 模式，不再启动 WebSocket 服务
+        # WebSocket 服务已被 HTTP API (/api/kirara/chat) 替代
+        print("[System] Kirara_Service 运行在 HTTP API 模式，WebSocket 服务已禁用")
+        # 保持线程存活
+        while self.running:
+            time.sleep(1)
+    
+    def stop(self):
+        # 停止服务
+        if self.server:
+            self.server.close()
+            self.running = False
+            print("[服务] Kirara WebSocket服务已停止")
+
+# ==========================================
+# 6. 主入口
+# =========================================
+if __name__ == "__main__":
+    print("[JRVS] JRVS Initating...")
+    print("""
+                                                                             x       x
+        K    K   IIIII   RRRRR         A       RRRRR         A             xxx     xxx
+       K  K       I     R    R       A A      R    R       A A          xxxxxxx    x     x
+      KK         I     RRRRR       AAAAA     RRRRR       AAAAA      xxxxxxxxxxxxx      xxx
+     K  K       I     R    R     A     A    R    R     A     A        xxxxxxx       xxxxxxx
+    K    K   IIIII   R     R   A       A   R     R   A       A         xxx           xxx
+                                                                       x             x
+        """)
+    print("="* 100)
+    print("JOINT RATIOCINATION VISUAL SYSTEM(JRVS)")
+    print("="*100)
+    check_environ()
+
+    api_client_instance = None
+    try:
+        from api_client import init_models, api_client
+        api_client_instance = init_models()
+        print("[JRVS] API客户端初始化成功")
+    except Exception as e:
+        print(f"[JRVS] API客户端初始化失败: {e}")
+        print("[JRVS] 将以独立模式运行，不支持外部模型路由")
+
+    print("[JRVS] Init Kernel...")
+    kernel = JRVS_Kernel(api_client=api_client_instance)
+
+    kernel.enable_router_mode()
+    print("[JRVS] Kirara-Router 模式已启用")
+
+    print("[JRVS] 前额叶模型配置: Kirara-Reasoning (llama-3.1-8b-instruct-reasoner-1o1)")
+    print("[JRVS] 深度思考任务将自动路由到前额叶模型进行处理")
+
+    print("[JRVS] WebSocket Service Initating...")
+    service = Kirara_Service(kernel)
+
+    service_thread = threading.Thread(target=service.run)
+    service_thread.daemon = True
+    service_thread.start()
+
+    time.sleep(2)
+    
+    # 保持主线程运行
+    print("[JRVS]JRVS Initated, Waiting for commands...")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("[JRVS]Closing WebSocket services...")
+        service.stop()
+        
+

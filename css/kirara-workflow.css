@@ -1,0 +1,158 @@
+/* ============================================================================
+   Kirara 工作流气泡（Workflow Trace）
+   ----------------------------------------------------------------------------
+   用途：当绮罗罗调用「技能」或「hippo 记忆」时，在对话流中渲染工作状态气泡。
+   形态：每一步一条小气泡，「进行中」原地更新为「完成 ✓」，整轮结束后保留为
+         一串工作轨迹（左侧细导轨 + 按类型着色）。
+   数据来源：/api/kirara/chat SSE 的 {"event":"workflow"} 事件。
+   ============================================================================ */
+
+/* 一轮对话的工作轨迹容器：整轮步骤收进同一容器，落在该轮 AI 气泡之前 */
+.workflow-trace {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 4px 0 10px 4px;
+    padding: 4px 0 4px 12px;
+    border-left: 2px solid rgba(147, 112, 219, 0.22);
+    animation: wf-trace-in 0.3s ease both;
+}
+
+@keyframes wf-trace-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 单条工作状态气泡 */
+.workflow-bubble {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 94%;
+    padding: 5px 12px;
+    border-radius: 14px 14px 14px 5px;
+    background: rgba(147, 112, 219, 0.10);
+    border: 1px solid rgba(147, 112, 219, 0.30);
+    color: #4a4a6a;
+    font-size: 13px;
+    line-height: 1.4;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    animation: wf-bubble-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes wf-bubble-in {
+    from { opacity: 0; transform: translateX(-10px) scale(0.96); }
+    to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+/* 稳定的完成态稍作收敛，弱化视觉重量（仍完整保留） */
+.workflow-bubble.is-done {
+    background: rgba(147, 112, 219, 0.07);
+}
+
+.workflow-bubble .wf-icon {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.85);
+    font-size: 13px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.workflow-bubble .wf-title {
+    flex: 0 0 auto;
+    font-weight: 600;
+    color: #6a4fb0;
+    white-space: nowrap;
+}
+
+.workflow-bubble .wf-detail {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: #77778f;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 右侧状态位：进行中=旋转圈，完成=✓，失败=! */
+.workflow-bubble .wf-status {
+    flex: 0 0 auto;
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 2px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.workflow-bubble.is-running .wf-status::after {
+    content: '';
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 2px solid rgba(147, 112, 219, 0.30);
+    border-top-color: #9370db;
+    animation: wf-spin 0.8s linear infinite;
+}
+
+.workflow-bubble.is-done .wf-status::after {
+    content: '✓';
+    color: #2e9e5b;
+}
+
+.workflow-bubble.is-error .wf-status::after {
+    content: '!';
+    color: #d64545;
+}
+
+@keyframes wf-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ---- 类型配色：hippo 记忆 / skill 技能 / model 模型路由 ---- */
+.workflow-bubble.wf-skill {
+    background: rgba(255, 165, 0, 0.12);
+    border-color: rgba(255, 165, 0, 0.38);
+}
+.workflow-bubble.wf-skill .wf-title { color: #c47b00; }
+.workflow-bubble.wf-skill.is-running .wf-status::after {
+    border-color: rgba(255, 165, 0, 0.30);
+    border-top-color: #ffa500;
+}
+
+.workflow-bubble.wf-model {
+    background: rgba(65, 105, 225, 0.10);
+    border-color: rgba(65, 105, 225, 0.34);
+}
+.workflow-bubble.wf-model .wf-title { color: #3a5fc4; }
+.workflow-bubble.wf-model.is-running .wf-status::after {
+    border-color: rgba(65, 105, 225, 0.30);
+    border-top-color: #4169e1;
+}
+
+.workflow-bubble.wf-error {
+    background: rgba(214, 69, 69, 0.10);
+    border-color: rgba(214, 69, 69, 0.34);
+}
+.workflow-bubble.wf-error .wf-title { color: #b93636; }
+
+/* ---- 窄屏适配：收窄缩进与详情列 ---- */
+@media (max-width: 768px) {
+    .workflow-trace {
+        margin-left: 0;
+        padding-left: 8px;
+    }
+    .workflow-bubble {
+        font-size: 12px;
+        max-width: 100%;
+    }
+    .workflow-bubble .wf-detail { max-width: 150px; }
+}
