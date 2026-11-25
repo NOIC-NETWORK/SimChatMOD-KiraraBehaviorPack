@@ -49,6 +49,13 @@ jrvs_kernel = None
 def init_jrvs():
     global jrvs_kernel
     if jrvs_kernel is None:
+        # 记忆库不入库，首次运行先把目录骨架建好（幂等，失败不影响内核启动）
+        try:
+            from init_memory import ensure_memory_layout
+
+            ensure_memory_layout()
+        except Exception as e:
+            print(f"[Kirara] 记忆库目录初始化失败: {e}")
         try:
             jrvs_kernel = JRVS_Kernel()
             jrvs_kernel.enable_router_mode()

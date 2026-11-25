@@ -1,2 +1,5 @@
 __pycache__/
 *.py[cod]
+
+# 记忆库（ChromaDB 向量库）属运行时数据，首次运行由 services/init_memory.py 创建
+memories/kirara_memory/
