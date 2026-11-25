@@ -1,3 +1,30 @@
+> **仓库定位**：这是 **Kirara 行为包（SimChat MOD）** 的源码仓库，不是独立应用，也没有可安装的发行包。
+> 它必须挂到 [SimChat](https://github.com/NOIC-NETWORK/SimChat) 宿主上加载才有意义，单独下载本仓库跑不起来。
+>
+> **当前状态：开发中。** 仓库内容是开发过程中的备份快照，功能未完成、接口会变，**不代表发布**，不提供安装包、版本承诺或使用支持。
+
+## 这个仓库是什么
+
+- 一个 SimChat 的 `skill` 类型 MOD：`manifest.json` 中 `id=kirara`、`layer=mod`、ABI `simchat-mod/2`，入口 `kirara_entry:register`。
+- 提供的内容：Kirara 女仆人设、桌宠窗口与 WAP 前端资源、`kirara.trivia` 方块、装备 `orbiter` 的只读地图（AI 实例）、MOD 专属对话卡片。
+- 依赖：先要有可运行的 SimChat 宿主；Python 侧依赖见 `requirements.txt`（flask、chromadb、sentence-transformers、pyttsx3 等）。
+
+## 怎么用
+
+1. 按 SimChat 仓库的说明把宿主跑起来。
+2. 让行为包位于宿主扫描的 MOD 目录（`.simchat/mods/kirara`），由宿主加载器读取 manifest 并加载。
+3. 记忆库（ChromaDB 向量库）不入库：首次初始化内核时会由 `services/init_memory.py` 自动创建目录骨架，也可手动执行 `py services/init_memory.py`。
+4. 默认模型依赖本地 JRVS（`televideo-ai/JRVS-7B-1.2.2:latest`）与 Ollama，未就绪时相关能力不可用。
+
+## 已知状态
+
+- 版本 `0.4.0`，开发中：Agent 方块、桌宠与前端为实验形态；Orbiter / router 与云端模型接入尚未实现（见 `manifest.json` 的 `config.models.not_implemented`）。
+- 本仓库只做代码备份，**不发布**，不承诺兼容性。
+
+---
+
+> 以下为行为包原始产品与开发文档，保留历史口径，其中「发布」「安装」类表述均不代表当前仓库状态。
+
 # Kirara TeleVideo 自研的二次元AI驱动宠物。
 
 # Companion, Copilot, Command Post. （我们的CP观，之后广告就按这个拍）
@@ -93,7 +120,7 @@
 - Kirara之所以造成人类女孩的样子，是因为这是巴里（以开发者为原型的角色）的”萌文化就是第一生产力“战略的产物，但并非是廉价的女性化Waifu角色，巴里希望她更像皮卡丘、史迪奇之类的角色一些。
 - Kirara早期的名称为“Eri“，设计为文生图模型。起因是科大讯飞的人来我们学校炫耀星火大模型的“角色扮演”模式，让我有了一个点子。
 - Kirara的核心——多模态大模型JRVS，其实是巴里用来作计算机视觉的模型，这也是她“能看到人类看不到的闪闪发亮的东西”的能力来源。
-- 巴里曾经做了一个梦，梦中他在马斯克和扎克面前演示过Kirara是怎么声控操作房子的家电的，并自豪地说：“This is Kirara, and she runs the house.” ，两个人的嘴巴几乎没合上过。
+- 巴里希望他可以在马斯克和扎克面前演示过Kirara是怎么声控操作房子的家电的，并自豪地说：“This is Kirara, and she runs the house.” ，巴里觉得这会让两个人的嘴巴几乎没合上。
 - Kirara的形象参考了《阿拉蕾》的阿拉蕾、《超能陆战队》的大白和《光环》的科塔娜，而JRVS则是来自《钢铁侠》漫画里的角色“贾维斯”。
 - Kirara的本质是巴里的动漫分身，很多性格都与巴里相似，比如会对用户科普各种小知识，嘴碎的性格。
 - Kirara具有名为“Orbiter”的编排器架构，她没有取代任何一个AI应用，只是让AI的使用变得更简单了，所以她就是用户的首席秘书和管家的合体。
